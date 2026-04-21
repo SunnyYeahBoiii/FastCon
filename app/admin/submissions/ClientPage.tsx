@@ -14,7 +14,7 @@ interface Submission {
   filename: string;
   status: string;
   score: number | null;
-  createdAt: Date;
+  createdAt: string;
   user: {
     id: string;
     name: string;
@@ -40,19 +40,23 @@ function getScoreBadge(score: number | null): { bg: string; text: string } {
     return { bg: "bg-surface-container-high", text: "text-on-surface-variant" };
   }
   if (score >= 90) {
-    return { bg: "bg-green-100", text: "text-green-700" };
+    return { bg: "bg-green-500/20", text: "text-green-400" };
   }
   if (score >= 70) {
-    return { bg: "bg-blue-100", text: "text-blue-700" };
+    return { bg: "bg-blue-500/20", text: "text-blue-400" };
   }
   if (score >= 50) {
-    return { bg: "bg-yellow-100", text: "text-yellow-700" };
+    return { bg: "bg-yellow-500/20", text: "text-yellow-400" };
   }
   return { bg: "bg-error-container", text: "text-error" };
 }
 
-function formatTime(date: Date): string {
-  return date.toLocaleTimeString("vi-VN", {
+function formatDate(iso: string): string {
+  return new Date(iso).toLocaleDateString("vi-VN");
+}
+
+function formatTime(iso: string): string {
+  return new Date(iso).toLocaleTimeString("vi-VN", {
     hour: "2-digit",
     minute: "2-digit",
   });
@@ -222,7 +226,7 @@ export default function SubmissionsPage() {
                       <td className="py-4 px-6 text-right">
                         <div className="flex flex-col items-end">
                           <span className="text-sm text-on-surface">
-                            {submission.createdAt.toLocaleDateString("vi-VN")}
+                            {formatDate(submission.createdAt)}
                           </span>
                           <span className="text-xs text-on-surface-variant">{formatTime(submission.createdAt)}</span>
                         </div>

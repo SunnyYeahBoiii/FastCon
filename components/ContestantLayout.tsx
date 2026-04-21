@@ -3,7 +3,7 @@
 import { Home, Trophy, Upload, Sun, Moon, LogOut, User } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useState } from "react";
+import { useTheme } from "@/lib/theme";
 
 const navItems = [
   { name: "Home", href: "/", icon: Home },
@@ -22,7 +22,7 @@ export default function ContestantLayout({
 }: ContestantLayoutProps) {
   const pathname = usePathname();
   const router = useRouter();
-  const [isDark, setIsDark] = useState(false);
+  const { isDark, toggle: toggleTheme } = useTheme();
 
   const handleLogout = async () => {
     await fetch("/api/logout", { method: "POST" });
@@ -49,7 +49,7 @@ export default function ContestantLayout({
                   href={item.href}
                   className={`px-4 py-2 rounded text-sm font-medium transition-colors ${
                     isActive
-                      ? "bg-white text-primary font-semibold"
+                      ? "bg-primary-container/20 text-primary font-semibold"
                       : "text-on-surface-variant hover:bg-surface-container-high/20"
                   }`}
                 >
@@ -84,7 +84,7 @@ export default function ContestantLayout({
               </Link>
             )}
             <button
-              onClick={() => setIsDark(!isDark)}
+              onClick={toggleTheme}
               className="p-2 rounded hover:bg-surface-container-high/20 transition-colors"
               aria-label="Toggle theme"
             >

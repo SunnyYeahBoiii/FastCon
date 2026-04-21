@@ -10,10 +10,13 @@ import {
   User,
   PanelLeftClose,
   PanelLeftOpen,
+  Sun,
+  Moon,
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
+import { useTheme } from "@/lib/theme";
 
 const adminNavItems = [
   {
@@ -43,6 +46,7 @@ export default function AdminLayout({
 }) {
   const pathname = usePathname();
   const [collapsed, setCollapsed] = useState(false);
+  const { isDark, toggle: toggleTheme } = useTheme();
   const sidebarWidth = collapsed ? SIDEBAR_COLLAPSED : SIDEBAR_EXPANDED;
 
   return (
@@ -78,7 +82,7 @@ export default function AdminLayout({
                     href={item.href}
                     className={`flex items-center gap-2 px-3 py-2 rounded transition-colors whitespace-nowrap ${
                       isActive
-                        ? "bg-white text-primary font-semibold"
+                        ? "bg-primary-container/20 text-primary font-semibold"
                         : "text-on-surface-variant hover:bg-surface-container-high/20"
                     }`}
                     title={item.name}
@@ -141,6 +145,17 @@ export default function AdminLayout({
                 Logical Architect Admin
               </span>
             </div>
+            <button
+              onClick={toggleTheme}
+              className="p-2 rounded hover:bg-surface-container-high/20 transition-colors"
+              aria-label="Toggle theme"
+            >
+              {isDark ? (
+                <Sun className="w-5 h-5 text-on-surface-variant" />
+              ) : (
+                <Moon className="w-5 h-5 text-on-surface-variant" />
+              )}
+            </button>
             <button
               className="p-2 rounded hover:bg-surface-container-high/20 transition-colors"
               aria-label="Notifications"
