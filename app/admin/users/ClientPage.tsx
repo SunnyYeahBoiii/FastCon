@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { Search, Eye, Trash2, Plus, X, UserPlus } from "lucide-react";
+import { Search, Eye, Trash2, Plus, X, UserPlus, FileJson } from "lucide-react";
 
 interface User {
   id: string;
@@ -28,7 +28,15 @@ export default function UsersPage() {
   // Modal states
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [showJsonModal, setShowJsonModal] = useState(false);
   const [userToDelete, setUserToDelete] = useState<User | null>(null);
+  const [jsonInput, setJsonInput] = useState("");
+  const [jsonError, setJsonError] = useState("");
+  const [importResults, setImportResults] = useState<{
+    success: number;
+    failed: number;
+    errors: string[];
+  } | null>(null);
 
   // Form states
   const [createForm, setCreateForm] = useState({
@@ -90,6 +98,108 @@ export default function UsersPage() {
     setIsSubmitting(false);
   };
 
+  const ALLOWED_FIELDS = new Set(["displayName", "username", "password", "role"]);
+  const ALLOWED_ROLES = new Set(["contestant", "judge", "admin"]);
+
+  function validateBulkJson(
+    input: string
+  ): { valid: boolean; users?: Array<{ displayName: string; username: string; password: string; role?: string }>; error?: string } {
+    let parsed;
+    try {
+      parsed = JSON.parse(input);
+    } catch (e: any) {
+      return { valid: false, error: `JSON không hợp lệ: ${e.message}` };
+    }
+
+    if (!Array.isArray(parsed)) {
+      return { valid: false, error: "Dữ liệu phải là một mảng JSON (bắt đầu bằng [ và kết thúc bằng ])" };
+    }
+
+    if (parsed.length === 0) {
+      return { valid: false, error: "Mảng rỗng, không có người dùng nào để thêm" };
+    }
+
+    for (let i = 0; i < parsed.length; i++) {
+      const item = parsed[i];
+      const idx = i + 1;
+
+      if (typeof item !== "object" || item === null || Array.isArray(item)) {
+        return { valid: false, error: `Phần tử ${idx}: phải là một object JSON` };
+      }
+
+      const keys = Object.keys(item);
+      for (const key of keys) {
+        if (!ALLOWED_FIELDS.has(key)) {
+          return { valid: false, error: `Phần tử ${idx}: trường '${key}' không được chấp nhận` };
+        }
+      }
+
+      for (const field of ["displayName", "username", "password"]) {
+        if (!item[field] || typeof item[field] !== "string" || item[field].trim() === "") {
+          return { valid: false, error: `Phần tử ${idx}: thiếu hoặc trống trường '${field}'` };
+        }
+      }
+
+      if (item.role !== undefined && !ALLOWED_ROLES.has(item.role)) {
+        return { valid: false, error: `Phần tử ${idx}: role '${item.role}' không hợp lệ. Chấp nhận: contestant, judge, admin` };
+      }
+    }
+
+    return { valid: true, users: parsed };
+  }
+
+  const handleJsonImport = async () => {
+    const validation = validateBulkJson(jsonInput);
+    if (!validation.valid) {
+      setJsonError(validation.error!);
+      return;
+    }
+
+    setIsSubmitting(true);
+    setJsonError("");
+    setImportResults(null);
+
+    let success = 0;
+    let failed = 0;
+    const errors: string[] = [];
+
+    for (const user of validation.users!) {
+      const res = await fetch("/api/users", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: user.displayName,
+          username: user.username,
+          password: user.password,
+          role: user.role || "contestant",
+        }),
+      });
+
+      if (res.ok) {
+        success++;
+      } else {
+        failed++;
+        try {
+          const data = await res.json();
+          errors.push(`${user.username}: ${data.error || "Lỗi không xác định"}`);
+        } catch {
+          errors.push(`${user.username}: Lỗi không xác định`);
+        }
+      }
+    }
+
+    setImportResults({ success, failed, errors });
+    setIsSubmitting(false);
+
+    if (failed === 0) {
+      setTimeout(() => {
+        setShowJsonModal(false);
+        setJsonInput("");
+        fetchUsers();
+      }, 1500);
+    }
+  };
+
   const handleDeleteUser = async () => {
     if (!userToDelete) return;
     setIsSubmitting(true);
@@ -119,6 +229,7 @@ export default function UsersPage() {
             Quản lý người dùng
           </h1>
         </div>
+        <div className="flex gap-3">
         <button
           onClick={() => setShowCreateModal(true)}
           className="flex items-center gap-2 px-6 py-2.5 bg-gradient-to-br from-primary to-primary-container text-on-primary rounded-lg font-semibold text-sm hover:shadow-lg transition-all"
@@ -126,6 +237,19 @@ export default function UsersPage() {
           <UserPlus className="w-4 h-4" />
           Thêm người dùng mới
         </button>
+        <button
+          onClick={() => {
+            setShowJsonModal(true);
+            setJsonInput("");
+            setJsonError("");
+            setImportResults(null);
+          }}
+          className="flex items-center gap-2 px-4 py-2.5 border border-outline-variant/30 text-on-surface-variant rounded-lg font-medium text-sm hover:bg-surface-container-high/50 transition-all"
+        >
+          <FileJson className="w-4 h-4" />
+          Thêm bằng JSON
+        </button>
+        </div>
       </header>
 
       {/* Search */}
@@ -377,6 +501,119 @@ export default function UsersPage() {
                 className="flex-1 px-4 py-2 bg-error text-on-error rounded-lg font-semibold hover:bg-error/90 transition-colors disabled:opacity-50"
               >
                 {isSubmitting ? "Đang xóa..." : "Xóa"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* JSON Bulk Import Modal */}
+      {showJsonModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div
+            className="absolute inset-0 bg-black/50 backdrop-blur-sm"
+            onClick={() => {
+              setShowJsonModal(false);
+              setJsonInput("");
+              setJsonError("");
+              setImportResults(null);
+            }}
+          />
+          <div className="relative bg-surface-container-lowest rounded-2xl shadow-xl w-full max-w-lg p-6 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-xl font-bold text-on-surface">Thêm người dùng bằng JSON</h2>
+              <button
+                onClick={() => {
+                  setShowJsonModal(false);
+                  setJsonInput("");
+                  setJsonError("");
+                  setImportResults(null);
+                }}
+                className="p-2 text-on-surface-variant hover:text-on-surface rounded-lg hover:bg-surface-container-high transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-on-surface-variant mb-2">
+                Định dạng mẫu (mảng JSON):
+              </label>
+              <pre className="text-xs bg-surface-container-high rounded-lg p-3 text-on-surface-variant overflow-x-auto font-mono">
+{`[
+  {
+    "displayName": "Nguyễn Văn A",
+    "username": "nguyenvana",
+    "password": "matkhaucuaban",
+    "role": "contestant"
+  }
+]`}
+              </pre>
+              <p className="text-xs text-on-surface-variant mt-2">
+                Roles: contestant, judge, admin (mặc định: contestant)
+              </p>
+            </div>
+
+            <div className="mb-4">
+              <textarea
+                value={jsonInput}
+                onChange={(e) => {
+                  setJsonInput(e.target.value);
+                  setJsonError("");
+                  setImportResults(null);
+                }}
+                rows={8}
+                placeholder="Dán JSON vào đây..."
+                className="w-full px-4 py-3 bg-surface-container-highest rounded-lg border-none focus:ring-0 focus:border-b-2 focus:border-b-primary focus:bg-surface-container-lowest transition-colors text-sm text-on-surface placeholder-on-surface-variant font-mono resize-none"
+              />
+            </div>
+
+            {jsonError && (
+              <div className="mb-4 bg-error-container/20 text-error rounded-lg px-4 py-3 text-sm">
+                <p className="font-medium mb-1">Lỗi định dạng:</p>
+                <p>{jsonError}</p>
+              </div>
+            )}
+
+            {importResults && (
+              <div className={`mb-4 rounded-lg px-4 py-3 text-sm ${
+                importResults.failed === 0
+                  ? "bg-primary-container/20 text-primary"
+                  : "bg-error-container/20 text-error"
+              }`}>
+                <p className="font-medium">
+                  Thành công: {importResults.success} | Thất bại: {importResults.failed}
+                </p>
+                {importResults.errors.length > 0 && (
+                  <ul className="mt-2 space-y-1 text-xs">
+                    {importResults.errors.map((e, i) => (
+                      <li key={i}>{e}</li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            )}
+
+            <div className="flex gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowJsonModal(false);
+                  setJsonInput("");
+                  setJsonError("");
+                  setImportResults(null);
+                }}
+                className="flex-1 px-4 py-2 bg-surface-container-high text-on-surface-variant rounded-lg font-medium hover:bg-surface-container-high/80 transition-colors"
+              >
+                Hủy
+              </button>
+              <button
+                type="button"
+                onClick={handleJsonImport}
+                disabled={isSubmitting || !jsonInput.trim()}
+                className="flex-1 px-4 py-2 bg-gradient-to-br from-primary to-primary-container text-on-primary rounded-lg font-semibold hover:shadow-lg transition-all disabled:opacity-50"
+              >
+                {isSubmitting ? "Đang xử lý..." : "Nhập"}
               </button>
             </div>
           </div>

@@ -142,13 +142,15 @@ export default function AdminLayout({
                 Logical Architect Admin
               </span>
             </div>
-            <ThemeToggle />
-            <button
-              className="p-2 rounded hover:bg-surface-container-high/20 transition-colors"
-              aria-label="Notifications"
-            >
-              <Bell className="w-5 h-5 text-on-surface-variant" />
-            </button>
+            <div className="flex items-center gap-1">
+              <ThemeToggle />
+              <button
+                className="p-2 rounded hover:bg-surface-container-high/20 transition-colors"
+                aria-label="Notifications"
+              >
+                <Bell className="w-5 h-5 text-on-surface-variant" />
+              </button>
+            </div>
           </div>
         </header>
 
