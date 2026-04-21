@@ -21,6 +21,7 @@ model Contest {
   title                  String
   description            String?
   groundTruthPath        String?
+  evaluateCode           String?
   deadline               DateTime?
   status                 String   @default("ongoing")
   dailySubmissionLimit   Int?
@@ -36,6 +37,7 @@ model Submission {
   filepath  String
   status    String   @default("uploaded")
   score     Float?
+  metrics   String?
   createdAt DateTime @default(now())
   user      User     @relation(fields: [userId], references: [id])
   contest   Contest  @relation(fields: [contestId], references: [id])

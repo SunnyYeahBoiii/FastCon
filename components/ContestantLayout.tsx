@@ -32,10 +32,10 @@ export default function ContestantLayout({
     <div className="min-h-full flex flex-col">
       {/* TopAppBar */}
       <header className="sticky top-0 z-50 bg-surface/80 backdrop-blur-xl border-b border-outline-variant/20">
-        <div className="max-w-screen-xl mx-auto px-4 h-14 flex items-center justify-between">
+        <div className="max-w-screen-xl mx-auto px-4 h-14 grid grid-cols-3 items-center justify-between">
           {/* Logo */}
           <div className="flex items-center gap-2 flex-shrink-0">
-            <span className="text-lg font-semibold text-primary">Logical Architect</span>
+            <span className="text-lg font-semibold text-primary">FastCons</span>
           </div>
 
           {/* Centered Nav - Desktop */}

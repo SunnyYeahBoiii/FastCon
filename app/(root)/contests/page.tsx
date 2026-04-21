@@ -34,13 +34,7 @@ export default async function ContestsPage() {
               Running Contests
             </h3>
           </div>
-          <a
-            className="text-primary font-semibold flex items-center gap-1 hover:underline"
-            href="#"
-          >
-            View all contests
-            <ArrowRight className="w-4 h-4" />
-          </a>
+          
         </div>
 
         {/* Contests list container */}

@@ -8,21 +8,29 @@ const adapter = new PrismaBetterSqlite3({
 });
 const prisma = new PrismaClient({ adapter });
 
-async function main() {
-  const adminPasswordHash = await hashPassword("admin123");
+const ADMIN_PASSWORD =
+  process.env.SEED_ADMIN_PASSWORD || "admin123";
+
+async function createAdmin() {
+  const passwordHash = await hashPassword(ADMIN_PASSWORD);
 
   const admin = await prisma.user.upsert({
     where: { username: "admin" },
-    update: {},
+    update: { passwordHash },
     create: {
       username: "admin",
-      passwordHash: adminPasswordHash,
-      name: "Admin Hệ Thống",
+      passwordHash,
+      name: "Admin",
       role: "admin",
     },
   });
 
-  console.log("Created admin user:", admin);
+  console.log("Admin user:", admin.username);
+  return admin;
+}
+
+async function seedFull() {
+  await createAdmin();
 
   const contest1 = await prisma.contest.upsert({
     where: { id: "seed-contest-1" },
@@ -34,8 +42,7 @@ async function main() {
       status: "ongoing",
     },
   });
-
-  console.log("Created contest 1:", contest1);
+  console.log("Created contest:", contest1.title);
 
   const contest2 = await prisma.contest.upsert({
     where: { id: "seed-contest-2" },
@@ -47,11 +54,16 @@ async function main() {
       status: "ongoing",
     },
   });
-
-  console.log("Created contest 2:", contest2);
+  console.log("Created contest:", contest2.title);
 }
 
-main()
+async function seedAdminOnly() {
+  await createAdmin();
+}
+
+const adminOnly = process.argv.includes("--admin-only");
+
+(adminOnly ? seedAdminOnly : seedFull)()
   .catch((e) => {
     console.error(e);
     process.exit(1);

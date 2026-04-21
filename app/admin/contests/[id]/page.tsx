@@ -6,6 +6,7 @@ import { requireAdmin } from "@/lib/requireAuth";
 import EditForm from "./EditForm";
 import GroundTruthSection from "./GroundTruthSection";
 import SubmissionsTable from "./SubmissionsTable";
+import EvaluateCodeSection from "./EvaluateCodeSection";
 
 interface ContestDetailPageProps {
   params: Promise<{ id: string }>;
@@ -85,12 +86,19 @@ export default async function ContestDetailPage({ params }: ContestDetailPagePro
           id: s.id,
           filename: s.filename,
           score: s.score,
+          metrics: s.metrics,
           status: s.status,
           createdAt: s.createdAt.toISOString(),
           user: {
             name: s.user.name,
           },
         }))}
+      />
+
+      {/* Evaluate Code Editor */}
+      <EvaluateCodeSection
+        contestId={contest.id}
+        initialEvaluateCode={contest.evaluateCode}
       />
     </div>
   );

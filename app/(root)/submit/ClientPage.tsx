@@ -52,23 +52,26 @@ export default function SubmitPage({ userId }: { userId: string }) {
       `/api/submissions/stream?userId=${userId}`
     );
 
-    eventSource.onmessage = (event) => {
+    eventSource.addEventListener("initial", (event) => {
       const data = JSON.parse(event.data);
-      if (data.type === "initial") {
-        setMySubmissions(data.submissions || []);
-      } else if (data.type === "update") {
-        const { submissionId, status, score, metrics } = data;
-        setMySubmissions((prev) =>
-          prev.map((sub) =>
-            sub.id === submissionId
-              ? { ...sub, status, score: score ?? sub.score, metrics: metrics ?? sub.metrics }
-              : sub
-          )
-        );
-      } else if (data.type === "poll_update") {
-        setMySubmissions(data.submissions || []);
-      }
-    };
+      setMySubmissions(data.submissions || []);
+    });
+
+    eventSource.addEventListener("update", (event) => {
+      const { submissionId, status, score, metrics } = JSON.parse(event.data);
+      setMySubmissions((prev) =>
+        prev.map((sub) =>
+          sub.id === submissionId
+            ? { ...sub, status, score: score ?? sub.score, metrics: metrics ?? sub.metrics }
+            : sub
+        )
+      );
+    });
+
+    eventSource.addEventListener("poll_update", (event) => {
+      const data = JSON.parse(event.data);
+      setMySubmissions(data.submissions || []);
+    });
 
     eventSource.onerror = () => {
       eventSource.close();

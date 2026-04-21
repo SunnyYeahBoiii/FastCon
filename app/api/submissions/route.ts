@@ -2,8 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { mkdir, writeFile } from "fs/promises";
 import path from "path";
-import { runJudge } from "@/lib/judge";
 import { requireAdminApi } from "@/lib/guard";
+import { processQueue } from "@/lib/queue";
+import "@/lib/init";
 
 export async function GET() {
   const guard = await requireAdminApi();
@@ -74,13 +75,13 @@ export async function POST(request: NextRequest) {
         contestId,
         filename: savedFilename,
         filepath,
-        status: "uploaded",
+        status: "queued",
       },
     });
 
-    // Fire-and-forget judge call
-    runJudge(submission.id).catch((err) => {
-      console.error("Judge error:", err);
+    // Trigger queue worker to process this submission
+    processQueue().catch((err) => {
+      console.error("Queue trigger error:", err);
     });
 
     return NextResponse.json({

@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { requireAdminApi } from "@/lib/guard";
+import { processQueue } from "@/lib/queue";
 
-export async function GET(
+export async function POST(
   _request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
@@ -10,13 +11,7 @@ export async function GET(
   if (guard instanceof Response) return guard;
 
   const { id } = await params;
-  const submission = await prisma.submission.findUnique({
-    where: { id },
-    include: {
-      user: { select: { id: true, name: true, username: true } },
-      contest: { select: { id: true, title: true } },
-    },
-  });
+  const submission = await prisma.submission.findUnique({ where: { id } });
 
   if (!submission) {
     return NextResponse.json(
@@ -25,5 +20,14 @@ export async function GET(
     );
   }
 
-  return NextResponse.json({ ok: true, submission });
+  await prisma.submission.update({
+    where: { id },
+    data: { status: "queued", score: null, metrics: null },
+  });
+
+  processQueue().catch((err) => {
+    console.error("Rerun queue error:", err);
+  });
+
+  return NextResponse.json({ ok: true });
 }

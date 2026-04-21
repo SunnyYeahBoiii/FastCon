@@ -17,6 +17,7 @@ export async function GET(request: NextRequest) {
         filename: true,
         status: true,
         score: true,
+        metrics: true,
         createdAt: true,
         contest: {
           select: { id: true, title: true },
