@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+
+<html lang="vi"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Kiểm tra bài nộp - Logical Architect Admin</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800;900&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "surface-dim": "#d8dadc",
+                        "secondary-fixed": "#dae2ff",
+                        "inverse-primary": "#b2c5ff",
+                        "primary-fixed": "#dae2ff",
+                        "secondary-fixed-dim": "#b4c5fb",
+                        "primary": "#003d9b",
+                        "on-surface-variant": "#434654",
+                        "on-surface": "#191c1e",
+                        "inverse-surface": "#2d3133",
+                        "tertiary": "#7b2600",
+                        "on-secondary-fixed-variant": "#344573",
+                        "surface-container-low": "#f2f4f6",
+                        "surface-container": "#eceef0",
+                        "secondary-container": "#b6c8fe",
+                        "on-secondary": "#ffffff",
+                        "secondary": "#4c5d8d",
+                        "error": "#ba1a1a",
+                        "surface-tint": "#0c56d0",
+                        "on-tertiary-container": "#ffc6b2",
+                        "surface": "#f7f9fb",
+                        "on-error": "#ffffff",
+                        "tertiary-container": "#a33500",
+                        "primary-fixed-dim": "#b2c5ff",
+                        "on-tertiary-fixed-variant": "#812800",
+                        "on-secondary-container": "#415382",
+                        "outline-variant": "#c3c6d6",
+                        "on-secondary-fixed": "#021945",
+                        "surface-container-lowest": "#ffffff",
+                        "inverse-on-surface": "#eff1f3",
+                        "surface-variant": "#e0e3e5",
+                        "surface-container-highest": "#e0e3e5",
+                        "tertiary-fixed": "#ffdbcf",
+                        "outline": "#737685",
+                        "on-primary-fixed-variant": "#0040a2",
+                        "on-primary-fixed": "#001848",
+                        "on-primary": "#ffffff",
+                        "error-container": "#ffdad6",
+                        "background": "#f7f9fb",
+                        "tertiary-fixed-dim": "#ffb59b",
+                        "surface-container-high": "#e6e8ea",
+                        "primary-container": "#0052cc",
+                        "on-primary-container": "#c4d2ff",
+                        "on-tertiary-fixed": "#380d00",
+                        "on-background": "#191c1e",
+                        "surface-bright": "#f7f9fb",
+                        "on-tertiary": "#ffffff",
+                        "on-error-container": "#93000a"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.125rem",
+                        "lg": "0.25rem",
+                        "xl": "0.5rem",
+                        "full": "0.75rem"
+                    },
+                    "spacing": {},
+                    "fontFamily": {
+                        "headline": ["Be Vietnam Pro"],
+                        "body": ["Be Vietnam Pro"],
+                        "label": ["Be Vietnam Pro"]
+                    }
+                },
+            },
+        }
+    </script>
+<style>
+        body { font-family: 'Be Vietnam Pro', sans-serif; }
+        .material-symbols-outlined { font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24; }
+        .glass-panel { background: rgba(247, 249, 251, 0.8); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); }
+        .gradient-btn { background: linear-gradient(135deg, #003d9b, #0052cc); }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-surface text-on-surface h-screen flex overflow-hidden">
+<!-- NavigationDrawer (Sidebar) -->
+<aside class="fixed left-0 top-0 flex flex-col p-4 gap-2 h-full h-screen w-72 border-r-0 tonal-shift bg-slate-100 shadow-none z-20">
+<!-- Header Profile -->
+<div class="flex items-center gap-3 mb-6 px-2">
+<div class="relative">
+<img alt="Admin Avatar" class="w-10 h-10 rounded-full object-cover border-2 border-surface-container-lowest" data-alt="Professional headshot of a man with short hair wearing a dark blue button-down shirt, neutral background, soft corporate lighting" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDnBTtCXRbTd0ITj8mtwWciqDt6-tHOT4bJIOyYajU0mGRP_QbCtlHu1XSVphLOfeqEexiBj0RO4BedlgyVw-o6m2PQ-sFio--1p0HfsPxuNAN7VnHFOh60bjw3evSfUYAS_lpCjOH574fctq89ld6g3PkdWTt5ho7X3L9_7V1BA2A_0gYBY79wQCiV1roF87H0LWeuWph76ZMct6SBwmXOLwjoYzKWpF6pNL3QwiXS4KYwmx4zdCkKWScqSt4OtkynvAhS3gRG_ahB"/>
+<span class="absolute bottom-0 right-0 w-3 h-3 bg-green-500 border-2 border-slate-100 rounded-full"></span>
+</div>
+<div>
+<h2 class="text-lg font-black text-blue-900 leading-tight">Admin Hệ Thống</h2>
+<p class="font-be-vietnam-pro text-sm font-medium text-slate-500">Administrator</p>
+</div>
+</div>
+<!-- Navigation Links -->
+<nav class="flex-1 space-y-1">
+<a class="flex items-center gap-3 px-3 py-2 text-slate-600 hover:text-blue-600 hover:bg-slate-200/40 rounded-lg group" href="#">
+<span class="material-symbols-outlined">emoji_events</span>
+<span class="font-be-vietnam-pro text-sm font-medium">Quản lý cuộc thi</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2 text-slate-600 hover:text-blue-600 hover:bg-slate-200/40 rounded-lg group" href="#">
+<span class="material-symbols-outlined">group</span>
+<span class="font-be-vietnam-pro text-sm font-medium">Quản lý người dùng</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2 text-blue-700 bg-white font-semibold rounded-lg shadow-sm" href="#">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">rule</span>
+<span class="font-be-vietnam-pro text-sm">Kiểm tra bài nộp</span>
+</a>
+</nav>
+<div class="mt-auto">
+<a class="flex items-center gap-3 px-3 py-2 text-slate-600 hover:text-error hover:bg-error-container/20 rounded-lg transition-colors" href="#">
+<span class="material-symbols-outlined">logout</span>
+<span class="font-be-vietnam-pro text-sm font-medium">Đăng xuất</span>
+</a>
+</div>
+</aside>
+<!-- Main Content Area -->
+<main class="flex-1 ml-72 flex flex-col h-screen overflow-hidden">
+<!-- TopAppBar (Web Header) -->
+<header class="docked full-width top-0 sticky z-40 bg-slate-50/80 backdrop-blur-xl shadow-none bg-slate-100 flex items-center justify-between px-8 py-4 w-full">
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined text-blue-700 text-2xl">terminal</span>
+<h1 class="font-be-vietnam-pro tracking-tight font-semibold text-xl font-bold tracking-tighter text-blue-800">Logical Architect Admin</h1>
+</div>
+<div class="flex items-center gap-4">
+<button class="p-2 text-slate-500 hover:bg-slate-200/50 rounded-full transition-colors scale-95 transition-transform duration-150">
+<span class="material-symbols-outlined">notifications</span>
+</button>
+</div>
+</header>
+<!-- Page Content -->
+<div class="flex-1 overflow-y-auto p-8 bg-surface">
+<div class="max-w-7xl mx-auto">
+<!-- Page Header -->
+<div class="mb-8 flex justify-between items-end">
+<div>
+<h2 class="text-3xl font-bold text-on-surface tracking-tight mb-2">Kiểm tra bài nộp</h2>
+<p class="text-on-surface-variant font-medium">Theo dõi và quản lý các bài nộp từ người dự thi.</p>
+</div>
+<!-- Filters/Actions (Conceptual) -->
+<div class="flex gap-3">
+<div class="relative">
+<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-outline">search</span>
+<input class="pl-10 pr-4 py-2 bg-surface-container-highest rounded-DEFAULT border-none focus:ring-0 focus:border-b-2 focus:border-b-primary focus:bg-surface-container-lowest transition-colors w-64 text-sm text-on-surface placeholder-on-surface-variant" placeholder="Tìm kiếm bài nộp..." type="text"/>
+</div>
+<button class="flex items-center gap-2 px-4 py-2 bg-surface-container-highest text-primary font-medium rounded-DEFAULT hover:bg-surface-variant transition-colors text-sm">
+<span class="material-symbols-outlined text-sm">filter_list</span>
+                            Lọc
+                        </button>
+</div>
+</div>
+<!-- Submissions Table Area -->
+<div class="bg-surface-container-low rounded-lg p-1">
+<div class="bg-surface-container-lowest rounded-lg shadow-[0_4px_24px_rgba(25,28,30,0.04)] overflow-hidden">
+<table class="w-full text-left border-collapse">
+<thead>
+<tr class="bg-surface-container text-on-surface-variant text-sm font-semibold tracking-wide border-b border-surface-variant/50">
+<th class="py-4 px-6 font-medium">Tên người nộp</th>
+<th class="py-4 px-6 font-medium">Cuộc thi</th>
+<th class="py-4 px-6 font-medium text-right">Số điểm</th>
+<th class="py-4 px-6 font-medium text-right">Thời gian nộp</th>
+<th class="py-4 px-6 font-medium text-center">Thao tác</th>
+</tr>
+</thead>
+<tbody class="divide-y divide-surface-container/50">
+<!-- Row 1 -->
+<tr class="hover:bg-surface-container-low/30 transition-colors group">
+<td class="py-4 px-6">
+<div class="flex items-center gap-3">
+<div class="w-8 h-8 rounded-full bg-primary-container text-on-primary-container flex items-center justify-center font-bold text-xs">
+                                                NA
+                                            </div>
+<span class="font-semibold text-on-surface group-hover:text-primary transition-colors">Nguyễn Văn A</span>
+</div>
+</td>
+<td class="py-4 px-6">
+<div class="flex items-center gap-2">
+<span class="px-3 py-1 bg-secondary-container text-on-secondary-container text-xs font-semibold rounded-DEFAULT">Task 1</span>
+<span class="text-sm text-on-surface-variant">Personalize Item Recommendation</span>
+</div>
+</td>
+<td class="py-4 px-6 text-right">
+<span class="inline-flex items-center justify-center px-2 py-1 bg-green-100 text-green-800 text-sm font-bold rounded-DEFAULT">
+                                            100
+                                        </span>
+</td>
+<td class="py-4 px-6 text-right text-sm text-on-surface-variant font-medium">
+                                        20/04/2024 <br/> <span class="text-xs text-outline">14:30</span>
+</td>
+<td class="py-4 px-6 text-center">
+<button class="p-1.5 text-primary hover:bg-surface-container-high rounded-DEFAULT transition-colors" title="Xem chi tiết">
+<span class="material-symbols-outlined text-xl">visibility</span>
+</button>
+</td>
+</tr>
+<!-- Row 2 -->
+<tr class="hover:bg-surface-container-low/30 transition-colors group">
+<td class="py-4 px-6">
+<div class="flex items-center gap-3">
+<div class="w-8 h-8 rounded-full bg-tertiary-container text-on-tertiary-container flex items-center justify-center font-bold text-xs">
+                                                TB
+                                            </div>
+<span class="font-semibold text-on-surface group-hover:text-primary transition-colors">Trần Thị B</span>
+</div>
+</td>
+<td class="py-4 px-6">
+<div class="flex items-center gap-2">
+<span class="px-3 py-1 bg-secondary-container text-on-secondary-container text-xs font-semibold rounded-DEFAULT">Task 2</span>
+<span class="text-sm text-on-surface-variant">Self-Forecasting</span>
+</div>
+</td>
+<td class="py-4 px-6 text-right">
+<span class="inline-flex items-center justify-center px-2 py-1 bg-yellow-100 text-yellow-800 text-sm font-bold rounded-DEFAULT">
+                                            85
+                                        </span>
+</td>
+<td class="py-4 px-6 text-right text-sm text-on-surface-variant font-medium">
+                                        20/04/2024 <br/> <span class="text-xs text-outline">14:45</span>
+</td>
+<td class="py-4 px-6 text-center">
+<button class="p-1.5 text-primary hover:bg-surface-container-high rounded-DEFAULT transition-colors" title="Xem chi tiết">
+<span class="material-symbols-outlined text-xl">visibility</span>
+</button>
+</td>
+</tr>
+<!-- Row 3 -->
+<tr class="hover:bg-surface-container-low/30 transition-colors group">
+<td class="py-4 px-6">
+<div class="flex items-center gap-3">
+<div class="w-8 h-8 rounded-full bg-primary-fixed-dim text-on-primary-fixed flex items-center justify-center font-bold text-xs">
+                                                LC
+                                            </div>
+<span class="font-semibold text-on-surface group-hover:text-primary transition-colors">Lê Văn C</span>
+</div>
+</td>
+<td class="py-4 px-6">
+<div class="flex items-center gap-2">
+<span class="px-3 py-1 bg-secondary-container text-on-secondary-container text-xs font-semibold rounded-DEFAULT">Task 1</span>
+<span class="text-sm text-on-surface-variant">Personalize Item Recommendation</span>
+</div>
+</td>
+<td class="py-4 px-6 text-right">
+<span class="inline-flex items-center justify-center px-2 py-1 bg-blue-100 text-blue-800 text-sm font-bold rounded-DEFAULT">
+                                            92
+                                        </span>
+</td>
+<td class="py-4 px-6 text-right text-sm text-on-surface-variant font-medium">
+                                        20/04/2024 <br/> <span class="text-xs text-outline">15:00</span>
+</td>
+<td class="py-4 px-6 text-center">
+<button class="p-1.5 text-primary hover:bg-surface-container-high rounded-DEFAULT transition-colors" title="Xem chi tiết">
+<span class="material-symbols-outlined text-xl">visibility</span>
+</button>
+</td>
+</tr>
+<!-- Row 4 (Extra for visual weight) -->
+<tr class="hover:bg-surface-container-low/30 transition-colors group">
+<td class="py-4 px-6">
+<div class="flex items-center gap-3">
+<div class="w-8 h-8 rounded-full bg-surface-variant text-on-surface-variant flex items-center justify-center font-bold text-xs">
+                                                PD
+                                            </div>
+<span class="font-semibold text-on-surface group-hover:text-primary transition-colors">Phạm Đình D</span>
+</div>
+</td>
+<td class="py-4 px-6">
+<div class="flex items-center gap-2">
+<span class="px-3 py-1 bg-secondary-container text-on-secondary-container text-xs font-semibold rounded-DEFAULT">Task 3</span>
+<span class="text-sm text-on-surface-variant">Graph Theory Challenge</span>
+</div>
+</td>
+<td class="py-4 px-6 text-right">
+<span class="inline-flex items-center justify-center px-2 py-1 bg-error-container text-on-error-container text-sm font-bold rounded-DEFAULT">
+                                            45
+                                        </span>
+</td>
+<td class="py-4 px-6 text-right text-sm text-on-surface-variant font-medium">
+                                        20/04/2024 <br/> <span class="text-xs text-outline">16:15</span>
+</td>
+<td class="py-4 px-6 text-center">
+<button class="p-1.5 text-primary hover:bg-surface-container-high rounded-DEFAULT transition-colors" title="Xem chi tiết">
+<span class="material-symbols-outlined text-xl">visibility</span>
+</button>
+</td>
+</tr>
+</tbody>
+</table>
+<!-- Pagination Concept -->
+<div class="flex items-center justify-between px-6 py-4 bg-surface-container-lowest border-t border-surface-variant/50">
+<span class="text-sm text-on-surface-variant">Hiển thị 1 - 4 của 128 bài nộp</span>
+<div class="flex gap-1">
+<button class="p-1 rounded-DEFAULT text-outline hover:bg-surface-container hover:text-on-surface transition-colors disabled:opacity-50" disabled="">
+<span class="material-symbols-outlined">chevron_left</span>
+</button>
+<button class="w-8 h-8 rounded-DEFAULT bg-primary-container text-on-primary-container text-sm font-bold flex items-center justify-center">1</button>
+<button class="w-8 h-8 rounded-DEFAULT text-on-surface-variant hover:bg-surface-container text-sm font-medium flex items-center justify-center transition-colors">2</button>
+<button class="w-8 h-8 rounded-DEFAULT text-on-surface-variant hover:bg-surface-container text-sm font-medium flex items-center justify-center transition-colors">3</button>
+<span class="w-8 h-8 flex items-center justify-center text-outline">...</span>
+<button class="p-1 rounded-DEFAULT text-outline hover:bg-surface-container hover:text-on-surface transition-colors">
+<span class="material-symbols-outlined">chevron_right</span>
+</button>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</main>
+</body></html>

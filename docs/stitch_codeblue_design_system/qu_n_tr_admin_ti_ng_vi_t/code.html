@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+
+<html class="light" lang="vi"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Bảng điều khiển Quản trị - The Logical Architect</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "secondary-fixed-dim": "#b4c5fb",
+                    "on-tertiary-fixed": "#380d00",
+                    "secondary-container": "#b6c8fe",
+                    "on-primary-fixed": "#001848",
+                    "surface-tint": "#0c56d0",
+                    "surface-container-highest": "#e0e3e5",
+                    "tertiary-fixed": "#ffdbcf",
+                    "secondary-fixed": "#dae2ff",
+                    "surface-dim": "#d8dadc",
+                    "outline": "#737685",
+                    "on-primary-fixed-variant": "#0040a2",
+                    "inverse-primary": "#b2c5ff",
+                    "surface-container-lowest": "#ffffff",
+                    "on-error": "#ffffff",
+                    "on-secondary": "#ffffff",
+                    "tertiary-container": "#a33500",
+                    "on-surface-variant": "#434654",
+                    "error-container": "#ffdad6",
+                    "tertiary": "#7b2600",
+                    "primary": "#003d9b",
+                    "on-error-container": "#93000a",
+                    "inverse-surface": "#2d3133",
+                    "on-secondary-fixed": "#021945",
+                    "on-background": "#191c1e",
+                    "outline-variant": "#c3c6d6",
+                    "on-secondary-container": "#415382",
+                    "surface-container-low": "#f2f4f6",
+                    "tertiary-fixed-dim": "#ffb59b",
+                    "background": "#f7f9fb",
+                    "on-tertiary-container": "#ffc6b2",
+                    "surface-container-high": "#e6e8ea",
+                    "primary-fixed": "#dae2ff",
+                    "on-surface": "#191c1e",
+                    "on-secondary-fixed-variant": "#344573",
+                    "error": "#ba1a1a",
+                    "on-tertiary-fixed-variant": "#812800",
+                    "surface": "#f7f9fb",
+                    "primary-fixed-dim": "#b2c5ff",
+                    "on-tertiary": "#ffffff",
+                    "surface-variant": "#e0e3e5",
+                    "secondary": "#4c5d8d",
+                    "primary-container": "#0052cc",
+                    "on-primary": "#ffffff",
+                    "surface-bright": "#f7f9fb",
+                    "inverse-on-surface": "#eff1f3",
+                    "surface-container": "#eceef0",
+                    "on-primary-container": "#c4d2ff"
+            },
+            "borderRadius": {
+                    "DEFAULT": "0.125rem",
+                    "lg": "0.25rem",
+                    "xl": "0.5rem",
+                    "full": "0.75rem"
+            },
+            "spacing": {},
+            "fontFamily": {
+                    "headline": [
+                            "Be Vietnam Pro"
+                    ],
+                    "body": [
+                            "Be Vietnam Pro"
+                    ],
+                    "label": [
+                            "Be Vietnam Pro"
+                    ]
+            }
+    },
+        },
+      }
+    </script>
+<style>
+        body {
+            font-family: 'Be Vietnam Pro', sans-serif;
+            background-color: #f7f9fb; /* background */
+            color: #191c1e; /* on-background */
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+</head>
+<body class="bg-background text-on-background antialiased flex h-screen overflow-hidden">
+<!-- NavigationDrawer Component -->
+<aside class="bg-slate-50 dark:bg-[#191c1e] text-[#0052CC] dark:text-blue-400 font-['Be_Vietnam_Pro'] antialiased tracking-tight h-screen w-72 flex flex-col border-r-0 bg-[#f2f4f6] dark:bg-[#1f2123] transition-colors duration-300 shadow-none fixed left-0 top-0 z-40 p-4 space-y-6">
+<!-- Header -->
+<div class="flex items-center space-x-3 mb-8 px-2">
+<div class="w-10 h-10 rounded-lg overflow-hidden bg-surface-container-high flex items-center justify-center">
+<img alt="Admin Profile Avatar" class="w-full h-full object-cover" data-alt="Close up portrait of a professional man with a neat beard, wearing a dark blue shirt against a neutral gray background" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAhpB_6flPHRjYwGaIqMPd60xs9wNIc0c2LBc7GEpwCQOszGfhDjVFVUl0vTbx3iumYGccDczpqI9yreUsK4JyXZLDk7wFeZD9Ra5M4j26Nbd43B-JV3N1M4J-2AiKxRV7N1Xls7u2YXhr4Is_0P3aWEkiNu1nu4tOX8U0L8mzz1k24im2n1TEvWQ1MarEEiFOrMDzA4_Zzuf9aPgFsOk-7vxYU4SEn1x5LrLv0cEZdGOBkM8_h86a9rP5G-fp63SNrAkUq6Xv4Hejy"/>
+</div>
+<div>
+<h2 class="text-xl font-bold tracking-tighter text-[#003d9b] dark:text-blue-200">Bảng điều khiển</h2>
+<p class="text-sm text-slate-500 dark:text-slate-400 font-medium">Logical Architect</p>
+</div>
+</div>
+<!-- Navigation Links -->
+<nav class="flex-1 space-y-2">
+<a class="flex items-center space-x-3 px-4 py-3 bg-white dark:bg-[#f7f9fb]/10 text-[#0052CC] dark:text-blue-300 font-semibold rounded-lg shadow-sm active:scale-[0.98] transition-transform" href="#">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">event_note</span>
+<span>Quản lý cuộc thi</span>
+</a>
+<a class="flex items-center space-x-3 px-4 py-3 text-slate-600 dark:text-slate-400 hover:bg-slate-200/50 dark:hover:bg-slate-800/50 hover:bg-[#f7f9fb] dark:hover:bg-white/5 transition-all duration-200 rounded-lg active:scale-[0.98]" href="#">
+<span class="material-symbols-outlined">group</span>
+<span>Quản lý người dùng</span>
+</a>
+<a class="flex items-center space-x-3 px-4 py-3 text-slate-600 dark:text-slate-400 hover:bg-slate-200/50 dark:hover:bg-slate-800/50 hover:bg-[#f7f9fb] dark:hover:bg-white/5 transition-all duration-200 rounded-lg active:scale-[0.98]" href="#">
+<span class="material-symbols-outlined">rule</span>
+<span>Kiểm tra bài nộp</span>
+</a>
+</nav>
+<!-- Footer / Meta -->
+<div class="mt-auto px-4 py-2">
+<p class="text-xs text-slate-400 dark:text-slate-500">v1.0.4</p>
+</div>
+</aside>
+<!-- Main Content Area -->
+<main class="flex-1 ml-72 p-8 overflow-y-auto bg-surface">
+<header class="mb-10 flex justify-between items-end">
+<div>
+<h1 class="text-3xl font-bold tracking-tight text-on-surface font-headline mb-2" style="letter-spacing: -0.02em;">Trung tâm Quản trị</h1>
+<p class="text-on-surface-variant font-body">Tổng quan và quản lý nền tảng thi đấu.</p>
+</div>
+<button class="bg-gradient-to-br from-primary to-primary-container text-on-primary px-6 py-2.5 rounded-xl font-label font-medium shadow-sm hover:shadow-md transition-shadow flex items-center space-x-2">
+<span class="material-symbols-outlined text-sm">add</span>
+<span>Cuộc thi mới</span>
+</button>
+</header>
+<!-- Quick Stats Bento Grid -->
+<div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12">
+<!-- Stat Card 1 -->
+<div class="bg-surface-container-lowest rounded-xl p-6 relative overflow-hidden group">
+<div class="absolute -right-4 -top-4 w-24 h-24 bg-primary/5 rounded-full blur-2xl group-hover:bg-primary/10 transition-colors duration-500"></div>
+<div class="flex items-center space-x-3 mb-4">
+<div class="w-10 h-10 rounded-lg bg-surface-container-low flex items-center justify-center text-primary">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">emoji_events</span>
+</div>
+<h3 class="text-on-surface-variant font-title font-medium">Tổng số cuộc thi</h3>
+</div>
+<div class="text-4xl font-headline font-bold text-on-surface tracking-tight">142</div>
+<div class="mt-2 text-sm text-secondary font-label">+3 tháng này</div>
+</div>
+<!-- Stat Card 2 -->
+<div class="bg-surface-container-lowest rounded-xl p-6 relative overflow-hidden group">
+<div class="absolute -right-4 -top-4 w-24 h-24 bg-tertiary-container/5 rounded-full blur-2xl group-hover:bg-tertiary-container/10 transition-colors duration-500"></div>
+<div class="flex items-center space-x-3 mb-4">
+<div class="w-10 h-10 rounded-lg bg-surface-container-low flex items-center justify-center text-primary">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">person</span>
+</div>
+<h3 class="text-on-surface-variant font-title font-medium">Người dùng hoạt động</h3>
+</div>
+<div class="text-4xl font-headline font-bold text-on-surface tracking-tight">8,904</div>
+<div class="mt-2 text-sm text-secondary font-label">+124 tuần này</div>
+</div>
+<!-- Stat Card 3 -->
+<div class="bg-surface-container-lowest rounded-xl p-6 relative overflow-hidden group">
+<div class="absolute -right-4 -top-4 w-24 h-24 bg-primary/5 rounded-full blur-2xl group-hover:bg-primary/10 transition-colors duration-500"></div>
+<div class="flex items-center space-x-3 mb-4">
+<div class="w-10 h-10 rounded-lg bg-surface-container-low flex items-center justify-center text-primary">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">code_blocks</span>
+</div>
+<h3 class="text-on-surface-variant font-title font-medium">Bài nộp đang chờ</h3>
+</div>
+<div class="text-4xl font-headline font-bold text-on-surface tracking-tight">34</div>
+<div class="mt-2 text-sm text-secondary font-label">Cần xem xét</div>
+</div>
+</div>
+<!-- Recent Contests Section -->
+<section class="bg-surface-container-low rounded-xl p-6">
+<div class="flex justify-between items-center mb-6">
+<h2 class="text-xl font-headline font-semibold text-on-surface">Các cuộc thi gần đây</h2>
+<button class="text-primary hover:bg-surface-container-highest px-3 py-1.5 rounded-lg font-label text-sm transition-colors flex items-center space-x-1">
+<span>Xem tất cả</span>
+<span class="material-symbols-outlined text-sm">arrow_forward</span>
+</button>
+</div>
+<div class="space-y-4">
+<!-- Contest Item 1 -->
+<div class="bg-surface-container-lowest rounded-lg p-5 flex items-center justify-between group hover:-translate-y-0.5 transition-transform duration-200">
+<div class="flex items-center space-x-5">
+<div class="w-12 h-12 rounded-lg bg-surface-container-low flex flex-col items-center justify-center">
+<span class="text-xs font-label text-on-surface-variant font-medium">T10</span>
+<span class="text-lg font-headline font-bold text-primary leading-none">24</span>
+</div>
+<div>
+<h4 class="font-headline font-semibold text-on-surface mb-1">Thuật toán Hàng tuần #45</h4>
+<div class="flex items-center space-x-3 text-sm text-on-surface-variant font-label">
+<span class="bg-secondary-container text-on-secondary-container px-3 py-0.5 rounded-sm">Đang hoạt động</span>
+<span>•</span>
+<span>1,204 Người tham gia</span>
+</div>
+</div>
+</div>
+<div class="flex items-center space-x-2 opacity-0 group-hover:opacity-100 transition-opacity">
+<button class="w-8 h-8 rounded-lg bg-surface-container hover:bg-surface-container-highest flex items-center justify-center text-on-surface-variant transition-colors" title="Chỉnh sửa">
+<span class="material-symbols-outlined text-sm">edit</span>
+</button>
+<button class="w-8 h-8 rounded-lg bg-surface-container hover:bg-surface-container-highest flex items-center justify-center text-on-surface-variant transition-colors" title="Cài đặt">
+<span class="material-symbols-outlined text-sm">settings</span>
+</button>
+<button class="w-8 h-8 rounded-lg hover:bg-error-container flex items-center justify-center text-error transition-colors" title="Xóa">
+<span class="material-symbols-outlined text-sm">delete</span>
+</button>
+</div>
+</div>
+<!-- Contest Item 2 -->
+<div class="bg-surface-container-lowest rounded-lg p-5 flex items-center justify-between group hover:-translate-y-0.5 transition-transform duration-200">
+<div class="flex items-center space-x-5">
+<div class="w-12 h-12 rounded-lg bg-surface-container-low flex flex-col items-center justify-center">
+<span class="text-xs font-label text-on-surface-variant font-medium">T10</span>
+<span class="text-lg font-headline font-bold text-on-surface-variant leading-none">17</span>
+</div>
+<div>
+<h4 class="font-headline font-semibold text-on-surface mb-1">Dynamic Programming Sprint</h4>
+<div class="flex items-center space-x-3 text-sm text-on-surface-variant font-label">
+<span class="bg-surface-container-highest text-on-surface-variant px-3 py-0.5 rounded-sm">Đã hoàn thành</span>
+<span>•</span>
+<span>856 Người tham gia</span>
+</div>
+</div>
+</div>
+<div class="flex items-center space-x-2 opacity-0 group-hover:opacity-100 transition-opacity">
+<button class="w-8 h-8 rounded-lg bg-surface-container hover:bg-surface-container-highest flex items-center justify-center text-on-surface-variant transition-colors" title="Chỉnh sửa">
+<span class="material-symbols-outlined text-sm">edit</span>
+</button>
+<button class="w-8 h-8 rounded-lg bg-surface-container hover:bg-surface-container-highest flex items-center justify-center text-on-surface-variant transition-colors" title="Cài đặt">
+<span class="material-symbols-outlined text-sm">settings</span>
+</button>
+<button class="w-8 h-8 rounded-lg hover:bg-error-container flex items-center justify-center text-error transition-colors" title="Xóa">
+<span class="material-symbols-outlined text-sm">delete</span>
+</button>
+</div>
+</div>
+<!-- Contest Item 3 -->
+<div class="bg-surface-container-lowest rounded-lg p-5 flex items-center justify-between group hover:-translate-y-0.5 transition-transform duration-200">
+<div class="flex items-center space-x-5">
+<div class="w-12 h-12 rounded-lg bg-surface-container-low flex flex-col items-center justify-center">
+<span class="text-xs font-label text-on-surface-variant font-medium">T10</span>
+<span class="text-lg font-headline font-bold text-on-surface-variant leading-none">10</span>
+</div>
+<div>
+<h4 class="font-headline font-semibold text-on-surface mb-1">Graph Theory Masters</h4>
+<div class="flex items-center space-x-3 text-sm text-on-surface-variant font-label">
+<span class="bg-surface-container-highest text-on-surface-variant px-3 py-0.5 rounded-sm">Đã hoàn thành</span>
+<span>•</span>
+<span>2,105 Người tham gia</span>
+</div>
+</div>
+</div>
+<div class="flex items-center space-x-2 opacity-0 group-hover:opacity-100 transition-opacity">
+<button class="w-8 h-8 rounded-lg bg-surface-container hover:bg-surface-container-highest flex items-center justify-center text-on-surface-variant transition-colors" title="Chỉnh sửa">
+<span class="material-symbols-outlined text-sm">edit</span>
+</button>
+<button class="w-8 h-8 rounded-lg bg-surface-container hover:bg-surface-container-highest flex items-center justify-center text-on-surface-variant transition-colors" title="Cài đặt">
+<span class="material-symbols-outlined text-sm">settings</span>
+</button>
+<button class="w-8 h-8 rounded-lg hover:bg-error-container flex items-center justify-center text-error transition-colors" title="Xóa">
+<span class="material-symbols-outlined text-sm">delete</span>
+</button>
+</div>
+</div>
+</div>
+</section>
+</main>
+</body></html>

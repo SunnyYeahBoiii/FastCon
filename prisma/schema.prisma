@@ -1,0 +1,42 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  passwordHash String
+  name      String
+  role      String   @default("contestant")
+  createdAt DateTime @default(now())
+  submissions Submission[]
+}
+
+model Contest {
+  id              String   @id @default(cuid())
+  code            String   @unique
+  title           String
+  description     String?
+  groundTruthPath String?
+  deadline        DateTime?
+  status          String   @default("ongoing")
+  createdAt       DateTime @default(now())
+  submissions     Submission[]
+}
+
+model Submission {
+  id        String   @id @default(cuid())
+  userId    String
+  contestId String
+  filename  String
+  filepath  String
+  status    String   @default("uploaded")
+  score     Float?
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id])
+  contest   Contest  @relation(fields: [contestId], references: [id])
+}

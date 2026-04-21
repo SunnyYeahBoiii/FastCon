@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Submit Solution - Logical Architect</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+          darkMode: "class",
+          theme: {
+            extend: {
+              "colors": {
+                      "on-tertiary": "#ffffff",
+                      "on-secondary-container": "#415382",
+                      "on-secondary-fixed-variant": "#344573",
+                      "secondary-fixed-dim": "#b4c5fb",
+                      "outline-variant": "#c3c6d6",
+                      "on-tertiary-fixed-variant": "#812800",
+                      "on-primary-fixed": "#001848",
+                      "on-primary-container": "#c4d2ff",
+                      "secondary": "#4c5d8d",
+                      "on-primary": "#ffffff",
+                      "primary-fixed-dim": "#b2c5ff",
+                      "surface-container": "#eceef0",
+                      "secondary-fixed": "#dae2ff",
+                      "primary-fixed": "#dae2ff",
+                      "tertiary-fixed-dim": "#ffb59b",
+                      "surface-tint": "#0c56d0",
+                      "surface": "#f7f9fb",
+                      "on-tertiary-container": "#ffc6b2",
+                      "inverse-primary": "#b2c5ff",
+                      "surface-container-lowest": "#ffffff",
+                      "secondary-container": "#b6c8fe",
+                      "error": "#ba1a1a",
+                      "on-surface": "#191c1e",
+                      "tertiary-fixed": "#ffdbcf",
+                      "on-tertiary-fixed": "#380d00",
+                      "on-secondary-fixed": "#021945",
+                      "surface-container-highest": "#e0e3e5",
+                      "primary-container": "#0052cc",
+                      "primary": "#003d9b",
+                      "surface-bright": "#f7f9fb",
+                      "on-primary-fixed-variant": "#0040a2",
+                      "surface-container-high": "#e6e8ea",
+                      "on-error": "#ffffff",
+                      "inverse-on-surface": "#eff1f3",
+                      "tertiary": "#7b2600",
+                      "outline": "#737685",
+                      "tertiary-container": "#a33500",
+                      "surface-container-low": "#f2f4f6",
+                      "on-secondary": "#ffffff",
+                      "on-surface-variant": "#434654",
+                      "inverse-surface": "#2d3133",
+                      "surface-variant": "#e0e3e5",
+                      "error-container": "#ffdad6",
+                      "on-background": "#191c1e",
+                      "surface-dim": "#d8dadc",
+                      "background": "#f7f9fb",
+                      "on-error-container": "#93000a"
+              },
+              "borderRadius": {
+                      "DEFAULT": "0.125rem",
+                      "lg": "0.25rem",
+                      "xl": "0.5rem",
+                      "full": "0.75rem"
+              },
+              "spacing": {},
+              "fontFamily": {
+                      "headline": [
+                              "Be Vietnam Pro"
+                      ],
+                      "body": [
+                              "Be Vietnam Pro"
+                      ],
+                      "label": [
+                              "Be Vietnam Pro"
+                      ]
+              }
+      },
+          },
+        }
+      </script>
+<style>
+        body {
+            font-family: 'Be Vietnam Pro', sans-serif;
+            background-color: theme('colors.surface');
+            color: theme('colors.on-surface');
+        }
+        .material-symbols-outlined {
+          font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+      </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+</head>
+<body class="min-h-screen antialiased bg-surface text-on-surface flex flex-col">
+<!-- TopAppBar -->
+<header class="fixed top-0 w-full z-50 bg-slate-50/80 dark:bg-slate-900/80 backdrop-blur-lg font-be-vietnam-pro text-sm tracking-tight shadow-sm dark:shadow-none">
+<div class="flex items-center justify-between px-6 py-3 w-full max-w-screen-2xl mx-auto">
+<!-- Leading -->
+<div class="flex-1 flex items-center gap-3">
+</div>
+<!-- Center Navigation (Hidden on Mobile) -->
+<nav class="hidden md:flex flex-1 justify-center items-center gap-8">
+<a class="text-slate-500 dark:text-slate-400 font-medium hover:text-blue-600 hover:bg-slate-100/50 dark:hover:bg-slate-800/50 transition-colors px-3 py-2 rounded-DEFAULT" href="#">Home</a>
+<a class="text-slate-500 dark:text-slate-400 font-medium hover:text-blue-600 hover:bg-slate-100/50 dark:hover:bg-slate-800/50 transition-colors px-3 py-2 rounded-DEFAULT" href="#">Leaderboard</a>
+<a class="text-blue-700 dark:text-blue-400 font-bold border-b-2 border-blue-600 pb-1 hover:bg-slate-100/50 dark:hover:bg-slate-800/50 transition-colors px-3 py-2" href="#">Submit</a>
+</nav>
+<!-- Trailing -->
+<div class="flex-1 flex items-center justify-end gap-4">
+<span class="hidden md:inline font-medium text-on-surface-variant text-sm">Hi, Alex</span>
+<button class="p-2 rounded-DEFAULT text-on-surface-variant hover:bg-slate-100/50 dark:hover:bg-slate-800/50 transition-colors flex items-center justify-center">
+<span class="material-symbols-outlined" data-icon="light_mode">light_mode</span>
+</button>
+<button class="p-2 rounded-DEFAULT text-on-surface-variant hover:bg-slate-100/50 dark:hover:bg-slate-800/50 transition-colors flex items-center justify-center">
+<span class="material-symbols-outlined" data-icon="logout">logout</span>
+</button>
+</div>
+</div>
+<div class="bg-slate-200 dark:bg-slate-800 h-px w-full absolute bottom-0 opacity-20"></div>
+</header>
+<!-- Main Content -->
+<main class="flex-grow pt-24 pb-20 md:pb-12 px-4 sm:px-6 lg:px-8 max-w-screen-md mx-auto w-full">
+<div class="mb-10">
+<h1 class="text-3xl font-bold font-headline tracking-tight text-on-surface mb-2">Submit Solution</h1>
+<p class="text-on-surface-variant font-body leading-relaxed">Upload your source code for evaluation. Ensure your logic is sound and highly optimized.</p>
+</div>
+<form class="space-y-8 bg-surface-container-low p-6 sm:p-8 rounded-lg shadow-[0_8px_30px_rgb(0,0,0,0.04)]">
+<!-- Task Selection -->
+<div class="space-y-3">
+<label class="block text-sm font-semibold font-label text-on-surface" for="task-select">Select Task</label>
+<div class="relative">
+<select class="appearance-none w-full bg-surface-container-highest border-0 border-b-2 border-transparent text-on-surface text-sm rounded-DEFAULT px-4 py-3 focus:ring-0 focus:border-primary focus:bg-surface-container-lowest transition-all font-body cursor-pointer" id="task-select" name="task">
+<option disabled="" selected="" value="">Choose a task to submit for...</option>
+<option value="task1">Task 1: Personalize Item Recommendation</option>
+<option value="task2">Task 2: Self-Forecasting</option>
+</select>
+<div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-4 text-on-surface-variant">
+<span class="material-symbols-outlined" data-icon="expand_more">expand_more</span>
+</div>
+</div>
+</div>
+<!-- File Upload Area -->
+<div class="space-y-3">
+<label class="block text-sm font-semibold font-label text-on-surface">Source Code</label>
+<div class="relative group cursor-pointer">
+<input aria-label="Upload Source Code" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10" id="file-upload" name="file-upload" type="file"/>
+<div class="flex flex-col items-center justify-center p-12 bg-surface-container-lowest rounded-lg border-2 border-dashed border-outline-variant/50 group-hover:border-primary/50 group-hover:bg-primary/5 transition-colors text-center relative overflow-hidden">
+<span class="material-symbols-outlined text-4xl text-primary mb-4" data-icon="cloud_upload">cloud_upload</span>
+<h3 class="text-base font-semibold font-headline text-on-surface mb-1">Drag and drop your source code here</h3>
+<p class="text-sm text-on-surface-variant font-body mb-4">or click to browse .pkl files from your device</p>
+<div class="flex gap-2 justify-center"><span class="px-3 py-1 bg-secondary-container text-on-secondary-container text-xs font-medium rounded-DEFAULT font-label">.pkl</span></div>
+</div>
+</div>
+</div>
+<!-- Submit Button -->
+<div class="pt-6">
+<button class="w-full sm:w-auto px-8 py-3 bg-gradient-to-br from-primary to-primary-container text-on-primary font-semibold text-sm rounded-DEFAULT shadow-[0_4px_14px_0_rgba(0,61,155,0.2)] hover:shadow-[0_6px_20px_rgba(0,61,155,0.23)] hover:opacity-90 transition-all font-label tracking-wide flex items-center justify-center gap-2" type="submit">
+<span class="material-symbols-outlined text-sm" data-icon="send">send</span>
+                    Submit Evaluation
+                </button>
+</div>
+</form>
+</main>
+<!-- BottomNavBar (Mobile Only) -->
+<nav class="fixed bottom-0 left-0 w-full flex justify-around items-center px-4 py-2 md:hidden z-50 bg-white/90 dark:bg-slate-950/90 backdrop-blur-xl border-t border-slate-100 dark:border-slate-800 shadow-[0_-4px_20px_0_rgba(0,0,0,0.05)] rounded-t-xl">
+<a class="flex flex-col items-center justify-center text-slate-400 dark:text-slate-500 px-4 py-1.5 hover:bg-slate-50 dark:hover:bg-slate-900 transition-colors font-be-vietnam-pro text-[11px] font-semibold" href="#">
+<span class="material-symbols-outlined mb-1" data-icon="home">home</span>
+<span>Home</span>
+</a>
+<a class="flex flex-col items-center justify-center text-slate-400 dark:text-slate-500 px-4 py-1.5 hover:bg-slate-50 dark:hover:bg-slate-900 transition-colors font-be-vietnam-pro text-[11px] font-semibold" href="#">
+<span class="material-symbols-outlined mb-1" data-icon="leaderboard">leaderboard</span>
+<span>Leaderboard</span>
+</a>
+<a class="flex flex-col items-center justify-center bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 rounded-xl px-4 py-1.5 hover:bg-slate-50 dark:hover:bg-slate-900 transition-colors font-be-vietnam-pro text-[11px] font-semibold scale-95 duration-150" href="#">
+<span class="material-symbols-outlined mb-1" data-icon="publish">publish</span>
+<span>Submit</span>
+</a>
+</nav>
+</body></html>
