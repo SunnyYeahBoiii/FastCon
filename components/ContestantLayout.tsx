@@ -32,14 +32,14 @@ export default function ContestantLayout({
     <div className="min-h-full flex flex-col">
       {/* TopAppBar */}
       <header className="sticky top-0 z-50 bg-surface/80 backdrop-blur-xl border-b border-outline-variant/20">
-        <div className="max-w-screen-xl mx-auto px-4 h-14 flex items-center justify-between">
+        <div className="max-w-screen-xl mx-auto px-4 h-14 grid grid-cols-3 items-center">
           {/* Logo */}
           <div className="flex items-center gap-2">
             <span className="text-lg font-semibold text-primary">Logical Architect</span>
           </div>
 
           {/* Centered Nav - Desktop */}
-          <nav className="hidden md:flex items-center gap-1">
+          <nav className="hidden md:flex items-center justify-center gap-1">
             {navItems.map((item) => {
               const isActive = pathname === item.href;
               return (
@@ -59,7 +59,7 @@ export default function ContestantLayout({
           </nav>
 
           {/* Right side - User controls */}
-          <div className="flex items-center gap-3">
+          <div className="flex items-center justify-end gap-3">
             {user ? (
               <>
                 <span className="hidden md:block text-sm text-on-surface-variant">
