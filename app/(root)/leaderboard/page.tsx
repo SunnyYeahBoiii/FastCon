@@ -11,6 +11,7 @@ interface LeaderboardEntry {
   contestTitle: string;
   score: number;
   submissionCount: number;
+  recordPoints: number;
 }
 
 interface Contest {
@@ -84,7 +85,12 @@ export default function LeaderboardPage() {
     return rank % 2 === 0 ? "bg-surface" : "";
   };
 
-  const showContestColumn = !selectedContest;
+  const showContestColumn = !!selectedContest;
+
+  const sortedLeaderboard = [...filteredLeaderboard].sort((a, b) => {
+    if (b.recordPoints !== a.recordPoints) return b.recordPoints - a.recordPoints;
+    return b.score - a.score;
+  });
 
   if (loading) {
     return (
@@ -181,32 +187,33 @@ export default function LeaderboardPage() {
                 )}
                 <th className="py-4 px-6 font-medium text-right">Điểm</th>
                 <th className="py-4 px-6 font-medium text-right">Số lần nộp</th>
+                <th className="py-4 px-6 font-medium text-right">Điểm ghi sổ</th>
               </tr>
             </thead>
             <tbody className="text-on-background">
               {filteredLeaderboard.length === 0 ? (
                 <tr>
                   <td
-                    colSpan={showContestColumn ? 5 : 4}
+                    colSpan={showContestColumn ? 6 : 5}
                     className="py-12 text-center text-on-surface-variant"
                   >
                     Chưa có dữ liệu leaderboard
                   </td>
                 </tr>
               ) : (
-                filteredLeaderboard.map((entry) => (
+                sortedLeaderboard.map((entry) => (
                   <tr
                     key={entry.userId}
                     className={`group hover:bg-surface-container-low transition-colors duration-150 ${getRowBackground(entry.rank)}`}
                   >
                     {/* Rank with trophy icon for top 3 */}
                     <td className="py-4 px-6 font-bold text-lg flex items-center gap-2">
-                      <span className={getTrophyColor(entry.rank)}>
+                      <span className="text-primary">
                         {entry.rank}
                       </span>
                       {entry.rank <= 3 && (
                         <Trophy
-                          className={`w-5 h-5 ${getTrophyColor(entry.rank)}`}
+                          className={`w-5 h-5 text-primary`}
                           fill="currentColor"
                         />
                       )}
@@ -237,13 +244,15 @@ export default function LeaderboardPage() {
                     </td>
                     {/* Submission count */}
                     <td
-                      className={`py-4 px-6 text-right ${
-                        entry.rank <= 3
-                          ? "font-bold text-primary"
-                          : "font-semibold text-primary-container"
-                      }`}
+                      className={`py-4 px-6 text-right font-bold text-primary`}
                     >
                       {entry.submissionCount}
+                    </td>
+                    {/* Record points */}
+                    <td
+                      className={`py-4 px-6 text-right font-bold text-primary`}
+                    >
+                      {entry.recordPoints}
                     </td>
                   </tr>
                 ))

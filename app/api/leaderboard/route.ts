@@ -1,6 +1,14 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 
+function getPointsFromRank(rank: number): number {
+  if (rank === 1) return 10;
+  if (rank <= 3) return 9;
+  if (rank <= 6) return 8;
+  if (rank <= 11) return 7;
+  return 0;
+}
+
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const contestId = searchParams.get("contestId");
@@ -35,7 +43,7 @@ export async function GET(request: Request) {
     const existing = bestScores.get(key);
     if (!existing || sub.score! > existing.score) {
       bestScores.set(key, {
-        userId: sub.userId,
+        userId: sub.user.id,
         userName: sub.user.name,
         contestId: sub.contestId,
         contestTitle: sub.contest.title,
@@ -45,9 +53,26 @@ export async function GET(request: Request) {
     }
   }
 
-  const leaderboard = Array.from(bestScores.values())
+  // Step 1: sort by score, assign initial rank + recordPoints
+  const withPoints = Array.from(bestScores.values())
     .sort((a, b) => b.score - a.score)
-    .map((entry, index) => ({ rank: index + 1, ...entry }));
+    .map((entry, index) => ({
+      rank: index + 1,
+      recordPoints: getPointsFromRank(index + 1),
+      ...entry,
+    }));
+
+  // Step 2: re-sort by recordPoints (desc), then score (desc) as tiebreak
+  const leaderboard = withPoints
+    .sort((a, b) => {
+      if (b.recordPoints !== a.recordPoints) return b.recordPoints - a.recordPoints;
+      return b.score - a.score;
+    })
+    .map((entry, index) => ({
+      ...entry,
+      rank: index + 1,
+      recordPoints: getPointsFromRank(index + 1),
+    }));
 
   return NextResponse.json({ leaderboard });
 }
