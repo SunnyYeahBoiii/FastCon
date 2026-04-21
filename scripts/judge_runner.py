@@ -11,7 +11,7 @@ from pathlib import Path
 def get_submission(submission_id: str):
     """Fetch submission data from SQLite DB."""
     import sqlite3
-    db_path = Path(__file__).parent.parent / "prisma" / "dev.db"
+    db_path = Path(__file__).parent.parent / "dev.db"
     conn = sqlite3.connect(str(db_path))
     conn.row_factory = sqlite3.Row
     cursor = conn.execute("SELECT * FROM Submission WHERE id = ?", (submission_id,))
@@ -23,7 +23,7 @@ def get_submission(submission_id: str):
 def get_ground_truth_path(contest_id: str):
     """Get ground truth file path for a contest."""
     import sqlite3
-    db_path = Path(__file__).parent.parent / "prisma" / "dev.db"
+    db_path = Path(__file__).parent.parent / "dev.db"
     conn = sqlite3.connect(str(db_path))
     conn.row_factory = sqlite3.Row
     cursor = conn.execute("SELECT groundTruthPath FROM Contest WHERE id = ?", (contest_id,))
@@ -68,7 +68,7 @@ def main():
         print(f"Ground truth not found for contest {submission['contestId']}")
         # Update DB as failed
         import sqlite3
-        db_path = Path(__file__).parent.parent / "prisma" / "dev.db"
+        db_path = Path(__file__).parent.parent / "dev.db"
         conn = sqlite3.connect(str(db_path))
         conn.execute("UPDATE Submission SET status = 'failed' WHERE id = ?", (submission_id,))
         conn.commit()
@@ -85,7 +85,7 @@ def main():
 
         # Update DB
         import sqlite3
-        db_path = Path(__file__).parent.parent / "prisma" / "dev.db"
+        db_path = Path(__file__).parent.parent / "dev.db"
         conn = sqlite3.connect(str(db_path))
         conn.execute(
             "UPDATE Submission SET status = 'graded', score = ? WHERE id = ?",
@@ -97,7 +97,7 @@ def main():
     except Exception as e:
         print(f"Error judging submission: {e}")
         import sqlite3
-        db_path = Path(__file__).parent.parent / "prisma" / "dev.db"
+        db_path = Path(__file__).parent.parent / "dev.db"
         conn = sqlite3.connect(str(db_path))
         conn.execute("UPDATE Submission SET status = 'failed' WHERE id = ?", (submission_id,))
         conn.commit()
