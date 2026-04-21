@@ -4,6 +4,29 @@ import { subscribe } from "@/lib/events";
 
 export const maxDuration = 60;
 
+// Global registry for active SSE streams
+const activeStreams = new Set<{
+  enqueue: (data: string) => void;
+  close: () => void;
+  userId: string;
+}>();
+
+// Shutdown handler (registered once)
+if (!(global as any).__sseShutdownRegistered) {
+  (global as any).__sseShutdownRegistered = true;
+  const shutdown = (signal: string) => {
+    console.log(`[SSE] Server shutting down (${signal}), notifying ${activeStreams.size} clients`);
+    for (const stream of activeStreams) {
+      stream.enqueue(`event: shutdown\ndata: Server shutting down\n\n`);
+      stream.close();
+    }
+    activeStreams.clear();
+    process.exit(0);
+  };
+  process.on("SIGTERM", () => shutdown("SIGTERM"));
+  process.on("SIGINT", () => shutdown("SIGINT"));
+}
+
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const userId = searchParams.get("userId");
@@ -32,6 +55,7 @@ export async function GET(request: Request) {
   const cleanup = () => {
     if (closed) return;
     closed = true;
+    activeStreams.delete(streamHandle);
 
     if (pollInterval) clearInterval(pollInterval);
     if (timeoutId) clearTimeout(timeoutId);
@@ -43,6 +67,8 @@ export async function GET(request: Request) {
     heartbeatId = null;
     unsub = null;
   };
+
+  let streamHandle: { enqueue: (data: string) => void; close: () => void; userId: string };
 
   const stream = new ReadableStream<Uint8Array>({
     start(controller) {
@@ -62,6 +88,9 @@ export async function GET(request: Request) {
           controller.close();
         } catch {}
       };
+
+      streamHandle = { enqueue: safeEnqueue, close: safeClose, userId };
+      activeStreams.add(streamHandle);
 
       // Initial state
       safeEnqueue(

@@ -35,6 +35,24 @@ read -rp "Enter port [3000]: " PORT
 PORT="${PORT:-3000}"
 info "Using port ${PORT}"
 
+# Check if port is already in use
+if lsof -i:"${PORT}" >/dev/null 2>&1; then
+    error "Port ${PORT} is already in use"
+    echo "Options:"
+    echo "  1) Kill existing process: lsof -ti:${PORT} | xargs kill"
+    echo "  2) Use a different port"
+    echo ""
+    read -rp "Kill existing process? [y/N]: " KILL_CHOICE
+    if [[ "$KILL_CHOICE" =~ ^[Yy]$ ]]; then
+        lsof -ti:"${PORT}" | xargs kill 2>/dev/null || true
+        warn "Killed process on port ${PORT}"
+    else
+        error "Cannot start on port ${PORT}. Exiting."
+        exit 1
+    fi
+fi
+info "Port ${PORT} is available"
+
 echo ""
 
 # --- Build ---

@@ -53,3 +53,8 @@ next-env.d.ts
 # keep one starter DB for easy setup
 !prisma/dev.db
 docs
+
+# Python bytecode
+__pycache__/
+*.pyc
+*.pyo

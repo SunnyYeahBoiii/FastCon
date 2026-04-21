@@ -112,7 +112,7 @@ echo ""
 
 # --- Install Python dependencies ---
 echo "--- Installing Python dependencies ---"
-pip3 install numpy pandas
+pip3 install --user numpy pandas
 info "Python dependencies installed"
 
 echo ""
@@ -151,11 +151,15 @@ read -rp "Enter admin password [admin123]: " ADMIN_PASSWORD
 ADMIN_PASSWORD="${ADMIN_PASSWORD:-admin123}"
 
 # Write password to .env.local
+ESCAPED_PASSWORD="${ADMIN_PASSWORD//\\/\\\\}"
+ESCAPED_PASSWORD="${ESCAPED_PASSWORD//\//\\/}"
+ESCAPED_PASSWORD="${ESCAPED_PASSWORD//&/\\&}"
+
 if grep -q "^SEED_ADMIN_PASSWORD=" .env.local 2>/dev/null; then
     if [[ "$OSTYPE" == "darwin"* ]]; then
-        sed -i '' "s|^SEED_ADMIN_PASSWORD=.*|SEED_ADMIN_PASSWORD=\"${ADMIN_PASSWORD}\"|" .env.local
+        sed -i '' "s|^SEED_ADMIN_PASSWORD=.*|SEED_ADMIN_PASSWORD=\"${ESCAPED_PASSWORD}\"|" .env.local
     else
-        sed -i "s|^SEED_ADMIN_PASSWORD=.*|SEED_ADMIN_PASSWORD=\"${ADMIN_PASSWORD}\"|" .env.local
+        sed -i "s|^SEED_ADMIN_PASSWORD=.*|SEED_ADMIN_PASSWORD=\"${ESCAPED_PASSWORD}\"|" .env.local
     fi
 else
     echo "SEED_ADMIN_PASSWORD=\"${ADMIN_PASSWORD}\"" >> .env.local

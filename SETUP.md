@@ -96,17 +96,13 @@ npx tsx prisma/seed.ts
 npm run build
 ```
 
-### Step 5: Start production server
-
-```bash
-npm run start
-```
-
-Or development mode:
+### Step 5: Start development server
 
 ```bash
 npm run dev
 ```
+
+Open http://localhost:3000 (or your custom port)
 
 ## Default Accounts
 
