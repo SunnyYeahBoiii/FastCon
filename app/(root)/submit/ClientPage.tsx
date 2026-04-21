@@ -1,19 +1,26 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { Upload, Send, ChevronDown } from "lucide-react";
+
+interface Contest {
+  id: string;
+  title: string;
+}
 
 export default function SubmitPage({ userId }: { userId: string }) {
   const [selectedContest, setSelectedContest] = useState("");
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [contests, setContests] = useState<Contest[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Mock contest options - in real app, fetch from API
-  const contests = [
-    { id: "contest-1", title: "Task 1: Personalize Item Recommendation" },
-    { id: "contest-2", title: "Task 2: Self-Forecasting" },
-  ];
+  useEffect(() => {
+    fetch("/api/public/contests")
+      .then((res) => res.json())
+      .then((data) => setContests(data.contests || []))
+      .catch(console.error);
+  }, []);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -61,8 +68,8 @@ export default function SubmitPage({ userId }: { userId: string }) {
           fileInputRef.current.value = "";
         }
       } else {
-        const error = await response.json();
-        alert(`Submission failed: ${error.message || "Unknown error"}`);
+        const data = await response.json();
+        alert(`Submission failed: ${data.error || "Unknown error"}`);
       }
     } catch (error) {
       console.error("Submission error:", error);
