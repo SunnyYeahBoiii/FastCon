@@ -17,15 +17,16 @@ model User {
 }
 
 model Contest {
-  id              String   @id @default(cuid())
-  code            String   @unique
-  title           String
-  description     String?
-  groundTruthPath String?
-  deadline        DateTime?
-  status          String   @default("ongoing")
-  createdAt       DateTime @default(now())
-  submissions     Submission[]
+  id                     String   @id @default(cuid())
+  code                   String   @unique
+  title                  String
+  description            String?
+  groundTruthPath        String?
+  deadline               DateTime?
+  status                 String   @default("ongoing")
+  dailySubmissionLimit   Int?
+  createdAt              DateTime @default(now())
+  submissions            Submission[]
 }
 
 model Submission {
