@@ -1,11 +1,20 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
-import { Upload, Send, ChevronDown } from "lucide-react";
+import { useState, useRef, useEffect, useCallback } from "react";
+import { Upload, Send, ChevronDown, CheckCircle, Clock, AlertCircle } from "lucide-react";
 
 interface Contest {
   id: string;
   title: string;
+}
+
+interface Submission {
+  id: string;
+  filename: string;
+  status: string;
+  score: number | null;
+  createdAt: string;
+  contest: { id: string; title: string };
 }
 
 export default function SubmitPage({ userId }: { userId: string }) {
@@ -13,14 +22,28 @@ export default function SubmitPage({ userId }: { userId: string }) {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [contests, setContests] = useState<Contest[]>([]);
+  const [mySubmissions, setMySubmissions] = useState<Submission[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Fetch contests
   useEffect(() => {
     fetch("/api/public/contests")
       .then((res) => res.json())
       .then((data) => setContests(data.contests || []))
       .catch(console.error);
   }, []);
+
+  // Fetch my submissions
+  const fetchMySubmissions = useCallback(() => {
+    fetch(`/api/submissions/user?userId=${userId}`)
+      .then((res) => res.json())
+      .then((data) => setMySubmissions(data.submissions || []))
+      .catch(console.error);
+  }, [userId]);
+
+  useEffect(() => {
+    fetchMySubmissions();
+  }, [fetchMySubmissions]);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -67,6 +90,7 @@ export default function SubmitPage({ userId }: { userId: string }) {
         if (fileInputRef.current) {
           fileInputRef.current.value = "";
         }
+        fetchMySubmissions();
       } else {
         const data = await response.json();
         alert(`Submission failed: ${data.error || "Unknown error"}`);
@@ -191,6 +215,60 @@ export default function SubmitPage({ userId }: { userId: string }) {
           </button>
         </div>
       </form>
+
+      {/* My Submissions History */}
+      {mySubmissions.length > 0 && (
+        <div className="mt-8">
+          <h2 className="text-xl font-bold text-on-surface mb-4">Bài nộp của tôi</h2>
+          <div className="space-y-3">
+            {mySubmissions.map((sub) => (
+              <div
+                key={sub.id}
+                className="bg-surface-container-lowest rounded-lg p-4 shadow-[0_2px_12px_rgba(25,28,30,0.03)] flex items-center justify-between"
+              >
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="font-medium text-on-surface truncate">
+                      {sub.contest.title}
+                    </span>
+                    <StatusBadge status={sub.status} />
+                  </div>
+                  <div className="text-xs text-on-surface-variant">
+                    {new Date(sub.createdAt).toLocaleString("vi-VN")} · {sub.filename}
+                  </div>
+                </div>
+                <div className="ml-4 text-right">
+                  {sub.score !== null ? (
+                    <span className="text-lg font-bold text-primary">{sub.score.toFixed(1)}</span>
+                  ) : (
+                    <span className="text-sm text-on-surface-variant">--</span>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </main>
+  );
+}
+
+function StatusBadge({ status }: { status: string }) {
+  const config = {
+    graded: { icon: CheckCircle, bg: "bg-primary-container/20", text: "text-primary", label: "Đã chấm" },
+    uploaded: { icon: Clock, bg: "bg-surface-container-high", text: "text-on-surface-variant", label: "Đang chờ" },
+    grading: { icon: Clock, bg: "bg-tertiary-container/20", text: "text-tertiary", label: "Đang chấm" },
+    failed: { icon: AlertCircle, bg: "bg-error-container/20", text: "text-error", label: "Thất bại" },
+    error: { icon: AlertCircle, bg: "bg-error-container/20", text: "text-error", label: "Lỗi" },
+  } as const;
+
+  const c = config[status as keyof typeof config] ?? config.uploaded;
+  const Icon = c.icon;
+
+  return (
+    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${c.bg} ${c.text}`}>
+      <Icon className="w-3 h-3" />
+      {c.label}
+    </span>
   );
 }
