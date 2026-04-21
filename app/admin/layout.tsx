@@ -17,11 +17,6 @@ import { useState } from "react";
 
 const adminNavItems = [
   {
-    name: "Tổng quan",
-    href: "/admin",
-    icon: LayoutDashboard,
-  },
-  {
     name: "Quản lý cuộc thi",
     href: "/admin/contests",
     icon: LayoutDashboard,
