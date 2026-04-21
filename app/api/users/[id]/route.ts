@@ -1,10 +1,14 @@
 import { prisma } from "@/lib/db";
 import { NextResponse } from "next/server";
+import { requireAdminApi } from "@/lib/guard";
 
 export async function GET(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const guard = await requireAdminApi();
+  if (guard instanceof Response) return guard;
+
   const { id } = await params;
 
   const user = await prisma.user.findUnique({
@@ -46,6 +50,9 @@ export async function PUT(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const guard = await requireAdminApi();
+  if (guard instanceof Response) return guard;
+
   const { id } = await params;
 
   try {
@@ -95,6 +102,9 @@ export async function DELETE(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const guard = await requireAdminApi();
+  if (guard instanceof Response) return guard;
+
   const { id } = await params;
 
   try {

@@ -1,7 +1,11 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
+import { requireAdminApi } from "@/lib/guard";
 
 export async function GET() {
+  const guard = await requireAdminApi();
+  if (guard instanceof Response) return guard;
+
   try {
     const contests = await prisma.contest.findMany({
       orderBy: {
@@ -28,6 +32,9 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
+  const guard = await requireAdminApi();
+  if (guard instanceof Response) return guard;
+
   try {
     const body = await request.json();
     const { title, description, deadline, status, dailySubmissionLimit } = body;

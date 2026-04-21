@@ -1,8 +1,12 @@
 import { prisma } from "@/lib/db";
 import { hashPassword } from "@/lib/auth";
 import { NextResponse } from "next/server";
+import { requireAdminApi } from "@/lib/guard";
 
 export async function GET() {
+  const guard = await requireAdminApi();
+  if (guard instanceof Response) return guard;
+
   const users = await prisma.user.findMany({
     orderBy: { createdAt: "desc" },
     select: {
@@ -17,6 +21,9 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
+  const guard = await requireAdminApi();
+  if (guard instanceof Response) return guard;
+
   try {
     const body = await request.json();
     const { name, username, password, role } = body;

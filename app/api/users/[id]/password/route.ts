@@ -1,11 +1,15 @@
 import { prisma } from "@/lib/db";
 import { hashPassword } from "@/lib/auth";
 import { NextResponse } from "next/server";
+import { requireAdminApi } from "@/lib/guard";
 
 export async function PUT(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const guard = await requireAdminApi();
+  if (guard instanceof Response) return guard;
+
   const { id } = await params;
 
   try {

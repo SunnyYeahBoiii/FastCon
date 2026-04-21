@@ -2,11 +2,15 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { writeFile } from "fs/promises";
 import { join } from "path";
+import { requireAdminApi } from "@/lib/guard";
 
 export async function POST(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const guard = await requireAdminApi();
+  if (guard instanceof Response) return guard;
+
   try {
     const { id } = await params;
 

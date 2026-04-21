@@ -1,10 +1,14 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
+import { requireAdminApi } from "@/lib/guard";
 
 export async function GET(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const guard = await requireAdminApi();
+  if (guard instanceof Response) return guard;
+
   try {
     const { id } = await params;
 
@@ -41,6 +45,9 @@ export async function PUT(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const guard = await requireAdminApi();
+  if (guard instanceof Response) return guard;
+
   try {
     const { id } = await params;
     const body = await request.json();
@@ -85,6 +92,9 @@ export async function DELETE(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const guard = await requireAdminApi();
+  if (guard instanceof Response) return guard;
+
   try {
     const { id } = await params;
 

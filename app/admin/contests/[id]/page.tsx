@@ -2,6 +2,7 @@ import { prisma } from "@/lib/db";
 import { ArrowLeft } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { requireAdmin } from "@/lib/requireAuth";
 import EditForm from "./EditForm";
 import GroundTruthSection from "./GroundTruthSection";
 import SubmissionsTable from "./SubmissionsTable";
@@ -26,6 +27,7 @@ async function getContest(id: string) {
 }
 
 export default async function ContestDetailPage({ params }: ContestDetailPageProps) {
+  await requireAdmin();
   const { id } = await params;
   const contest = await getContest(id);
 

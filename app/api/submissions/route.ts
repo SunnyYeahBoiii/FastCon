@@ -3,8 +3,12 @@ import { prisma } from "@/lib/db";
 import { mkdir, writeFile } from "fs/promises";
 import path from "path";
 import { runJudge } from "@/lib/judge";
+import { requireAdminApi } from "@/lib/guard";
 
 export async function GET() {
+  const guard = await requireAdminApi();
+  if (guard instanceof Response) return guard;
+
   try {
     const submissions = await prisma.submission.findMany({
       orderBy: { createdAt: "desc" },
