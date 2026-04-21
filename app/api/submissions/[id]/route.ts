@@ -14,7 +14,7 @@ export async function GET(
         user: {
           select: {
             id: true,
-            email: true,
+            username: true,
             name: true,
             role: true,
           },
@@ -22,7 +22,6 @@ export async function GET(
         contest: {
           select: {
             id: true,
-            code: true,
             title: true,
             status: true,
           },

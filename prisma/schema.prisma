@@ -8,7 +8,7 @@ datasource db {
 
 model User {
   id        String   @id @default(cuid())
-  email     String   @unique
+  username  String   @unique
   passwordHash String
   name      String
   role      String   @default("contestant")
@@ -18,7 +18,6 @@ model User {
 
 model Contest {
   id                     String   @id @default(cuid())
-  code                   String   @unique
   title                  String
   description            String?
   groundTruthPath        String?

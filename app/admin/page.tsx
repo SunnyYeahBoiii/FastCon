@@ -110,20 +110,10 @@ export default async function AdminDashboard() {
                   </div>
                   <div>
                     <h3 className="font-medium text-on-surface">{contest.title}</h3>
-                    <p className="text-sm text-on-surface-variant">{contest.code}</p>
+                    <p className="text-sm text-on-surface-variant">{contest.status === "ongoing" ? "Đang hoạt động" : "Đã hoàn thành"}</p>
                   </div>
                 </div>
                 <div className="flex items-center gap-4">
-                  {/* Status Chip */}
-                  <span
-                    className={`px-3 py-1 rounded-full text-xs font-medium ${
-                      contest.status === "ongoing"
-                        ? "bg-secondary-container text-on-secondary"
-                        : "bg-surface-container-highest text-on-surface-variant"
-                    }`}
-                  >
-                    {contest.status === "ongoing" ? "Đang hoạt động" : "Đã hoàn thành"}
-                  </span>
                   {/* Participant Count */}
                   <span className="text-sm text-on-surface-variant">
                     {contest._count.submissions} bài nộp

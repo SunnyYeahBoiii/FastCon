@@ -44,7 +44,7 @@ export async function PUT(
   try {
     const { id } = await params;
     const body = await request.json();
-    const { title, code, description, deadline, status, dailySubmissionLimit } = body;
+    const { title, description, deadline, status, dailySubmissionLimit } = body;
 
     const contest = await prisma.contest.findUnique({
       where: { id },
@@ -57,24 +57,10 @@ export async function PUT(
       );
     }
 
-    if (code && code !== contest.code) {
-      const existingContest = await prisma.contest.findUnique({
-        where: { code },
-      });
-
-      if (existingContest) {
-        return NextResponse.json(
-          { ok: false, error: "Contest code already exists" },
-          { status: 400 }
-        );
-      }
-    }
-
     const updatedContest = await prisma.contest.update({
       where: { id },
       data: {
         title: title ?? contest.title,
-        code: code ?? contest.code,
         description: description ?? contest.description,
         deadline: deadline ? new Date(deadline) : contest.deadline,
         status: status ?? contest.status,

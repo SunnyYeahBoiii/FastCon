@@ -12,10 +12,10 @@ async function main() {
   const adminPasswordHash = await hashPassword("admin123");
 
   const admin = await prisma.user.upsert({
-    where: { email: "admin@example.com" },
+    where: { username: "admin" },
     update: {},
     create: {
-      email: "admin@example.com",
+      username: "admin",
       passwordHash: adminPasswordHash,
       name: "Admin Hệ Thống",
       role: "admin",
@@ -25,10 +25,10 @@ async function main() {
   console.log("Created admin user:", admin);
 
   const contest1 = await prisma.contest.upsert({
-    where: { code: "task1" },
+    where: { id: "seed-contest-1" },
     update: {},
     create: {
-      code: "task1",
+      id: "seed-contest-1",
       title: "Task 1 - Sample Contest",
       description: "First sample contest for testing",
       status: "ongoing",
@@ -38,10 +38,10 @@ async function main() {
   console.log("Created contest 1:", contest1);
 
   const contest2 = await prisma.contest.upsert({
-    where: { code: "task2" },
+    where: { id: "seed-contest-2" },
     update: {},
     create: {
-      code: "task2",
+      id: "seed-contest-2",
       title: "Task 2 - Sample Contest",
       description: "Second sample contest for testing",
       status: "ongoing",

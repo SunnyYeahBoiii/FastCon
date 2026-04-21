@@ -32,7 +32,7 @@ export async function POST(
     }
 
     // Create filename with contest code prefix
-    const filename = `${contest.code}_${file.name}`;
+    const filename = `${id}_${file.name}`;
     const filepath = join(process.cwd(), "storage", "testdata", filename);
 
     // Save file to storage/testdata

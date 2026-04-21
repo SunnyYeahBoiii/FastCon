@@ -6,18 +6,18 @@ import { verifyPassword } from "@/lib/auth";
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { email, password } = body;
+    const { username, password } = body;
 
-    if (!email || !password) {
+    if (!username || !password) {
       return NextResponse.json(
-        { ok: false, error: "Missing email or password" },
+        { ok: false, error: "Missing username or password" },
         { status: 400 }
       );
     }
 
-    // Find user by email
+    // Find user by username
     const user = await prisma.user.findUnique({
-      where: { email },
+      where: { username },
     });
 
     if (!user) {
@@ -50,7 +50,7 @@ export async function POST(request: NextRequest) {
       ok: true,
       user: {
         id: user.id,
-        email: user.email,
+        username: user.username,
         name: user.name,
         role: user.role,
       },

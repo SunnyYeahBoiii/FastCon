@@ -8,7 +8,7 @@ export async function GET() {
     select: {
       id: true,
       name: true,
-      email: true,
+      username: true,
       role: true,
       createdAt: true,
     },
@@ -19,9 +19,9 @@ export async function GET() {
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { name, email, password, role } = body;
+    const { name, username, password, role } = body;
 
-    if (!name || !email || !password) {
+    if (!name || !username || !password) {
       return NextResponse.json(
         { error: "Thiếu thông tin cần thiết" },
         { status: 400 }
@@ -29,12 +29,12 @@ export async function POST(request: Request) {
     }
 
     const existingUser = await prisma.user.findUnique({
-      where: { email },
+      where: { username },
     });
 
     if (existingUser) {
       return NextResponse.json(
-        { error: "Email đã tồn tại" },
+        { error: "Tên tài khoản đã tồn tại" },
         { status: 400 }
       );
     }
@@ -44,14 +44,14 @@ export async function POST(request: Request) {
     const user = await prisma.user.create({
       data: {
         name,
-        email,
+        username,
         passwordHash,
         role: role || "contestant",
       },
       select: {
         id: true,
         name: true,
-        email: true,
+        username: true,
         role: true,
         createdAt: true,
       },

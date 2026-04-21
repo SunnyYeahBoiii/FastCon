@@ -15,21 +15,21 @@ export default function LoginPage() {
 
         {/* Login form */}
         <form action="#" method="POST" className="space-y-6">
-          {/* Email input */}
+          {/* Username input */}
           <div className="space-y-1.5">
             <label
               className="block text-sm font-medium text-on-surface font-body"
-              htmlFor="email"
+              htmlFor="username"
             >
-              Email
+              Tên tài khoản
             </label>
             <input
               className="w-full bg-surface-container-highest border-0 rounded text-on-surface placeholder:text-outline focus:ring-0 focus:bg-surface-container-lowest focus:border-b-2 focus:border-primary transition-all duration-200 px-4 py-3 font-body"
-              id="email"
-              name="email"
-              placeholder="Enter your email"
+              id="username"
+              name="username"
+              placeholder="Nhập tên tài khoản"
               required
-              type="email"
+              type="text"
             />
           </div>
 

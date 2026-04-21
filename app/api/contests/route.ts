@@ -30,22 +30,11 @@ export async function GET() {
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { title, code, description, deadline, status, dailySubmissionLimit } = body;
+    const { title, description, deadline, status, dailySubmissionLimit } = body;
 
-    if (!title || !code) {
+    if (!title) {
       return NextResponse.json(
-        { ok: false, error: "Title and code are required" },
-        { status: 400 }
-      );
-    }
-
-    const existingContest = await prisma.contest.findUnique({
-      where: { code },
-    });
-
-    if (existingContest) {
-      return NextResponse.json(
-        { ok: false, error: "Contest code already exists" },
+        { ok: false, error: "Title is required" },
         { status: 400 }
       );
     }
@@ -53,7 +42,6 @@ export async function POST(request: Request) {
     const contest = await prisma.contest.create({
       data: {
         title,
-        code,
         description: description || null,
         deadline: deadline ? new Date(deadline) : null,
         status: status || "ongoing",

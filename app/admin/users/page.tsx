@@ -6,7 +6,7 @@ import { Search, Eye, Trash2, Plus, X, UserPlus } from "lucide-react";
 interface User {
   id: string;
   name: string;
-  email: string;
+  username: string;
   role: string;
   createdAt: string;
 }
@@ -33,7 +33,7 @@ export default function UsersPage() {
   // Form states
   const [createForm, setCreateForm] = useState({
     name: "",
-    email: "",
+    username: "",
     password: "",
     role: "contestant",
   });
@@ -59,7 +59,7 @@ export default function UsersPage() {
   const filteredUsers = users.filter(
     (user) =>
       user.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      user.email.toLowerCase().includes(searchQuery.toLowerCase())
+      user.username.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
   const handleCreateUser = async (e: React.FormEvent) => {
@@ -82,7 +82,7 @@ export default function UsersPage() {
       }
 
       setShowCreateModal(false);
-      setCreateForm({ name: "", email: "", password: "", role: "contestant" });
+      setCreateForm({ name: "", username: "", password: "", role: "contestant" });
       fetchUsers();
     } catch (error) {
       setFormError("Lỗi kết nối");
@@ -147,8 +147,8 @@ export default function UsersPage() {
         <table className="w-full text-left border-collapse">
           <thead>
             <tr className="bg-surface-container-low text-on-surface-variant font-semibold text-sm border-b border-outline-variant/15">
-              <th className="py-4 px-6 font-medium">Họ tên</th>
-              <th className="py-4 px-6 font-medium">Email</th>
+              <th className="py-4 px-6 font-medium">Tên hiển thị</th>
+              <th className="py-4 px-6 font-medium">Tên tài khoản</th>
               <th className="py-4 px-6 font-medium">Vai trò</th>
               <th className="py-4 px-6 font-medium">Trạng thái</th>
               <th className="py-4 px-6 font-medium text-right">Thao tác</th>
@@ -178,7 +178,7 @@ export default function UsersPage() {
                       <span className="font-medium text-on-surface">{user.name}</span>
                     </div>
                   </td>
-                  <td className="py-4 px-6 text-on-surface-variant">{user.email}</td>
+                  <td className="py-4 px-6 text-on-surface-variant">{user.username}</td>
                   <td className="py-4 px-6">
                     <span
                       className={`px-3 py-1 rounded-full text-xs font-medium ${
@@ -199,7 +199,7 @@ export default function UsersPage() {
                   <td className="py-4 px-6 text-right">
                     <a
                       href={`/admin/users/${user.id}`}
-                      className="p-2 text-on-surface-variant hover:text-primary transition-colors rounded hover:bg-surface-container-high mr-1 inline-block"
+                      className="p-2 text-on-surface-variant hover:text-primary transition-colors rounded hover:bg-surface-container-high mr-1 inline-flex items-center justify-center"
                     >
                       <Eye className="w-5 h-5" />
                     </a>
@@ -208,7 +208,7 @@ export default function UsersPage() {
                         setUserToDelete(user);
                         setShowDeleteModal(true);
                       }}
-                      className="p-2 text-on-surface-variant hover:text-error transition-colors rounded hover:bg-error-container/50"
+                      className="p-2 text-on-surface-variant hover:text-error transition-colors rounded hover:bg-error-container/50 inline-flex items-center justify-center"
                     >
                       <Trash2 className="w-5 h-5" />
                     </button>
@@ -278,13 +278,13 @@ export default function UsersPage() {
 
               <div>
                 <label className="block text-sm font-medium text-on-surface-variant mb-1">
-                  Email
+                  Tên tài khoản
                 </label>
                 <input
-                  type="email"
+                  type="text"
                   required
-                  value={createForm.email}
-                  onChange={(e) => setCreateForm({ ...createForm, email: e.target.value })}
+                  value={createForm.username}
+                  onChange={(e) => setCreateForm({ ...createForm, username: e.target.value })}
                   className="w-full px-4 py-2 bg-surface-container-highest rounded-lg border-none focus:ring-0 focus:border-b-2 focus:border-b-primary focus:bg-surface-container-lowest transition-colors text-sm text-on-surface"
                 />
               </div>

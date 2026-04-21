@@ -7,7 +7,7 @@ import Link from "next/link";
 interface User {
   id: string;
   name: string;
-  email: string;
+  username: string;
   role: string;
   createdAt: string;
   submissions: Submission[];
@@ -21,7 +21,6 @@ interface Submission {
   createdAt: string;
   contest: {
     id: string;
-    code: string;
     title: string;
   };
 }
@@ -181,7 +180,7 @@ export default function UserDetailPage({ params }: { params: Promise<{ id: strin
           </div>
           <div>
             <h1 className="text-2xl font-bold text-on-surface">{user.name}</h1>
-            <p className="text-on-surface-variant">{user.email}</p>
+            <p className="text-on-surface-variant">{user.username}</p>
           </div>
         </div>
 
@@ -289,7 +288,6 @@ export default function UserDetailPage({ params }: { params: Promise<{ id: strin
                     <div className="flex items-center gap-2">
                       <Trophy className="w-4 h-4 text-primary" />
                       <span className="font-medium text-on-surface">{submission.contest.title}</span>
-                      <span className="text-xs text-on-surface-variant">({submission.contest.code})</span>
                     </div>
                   </td>
                   <td className="py-4 px-6 text-on-surface-variant">{submission.filename}</td>

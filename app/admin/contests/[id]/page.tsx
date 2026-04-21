@@ -54,9 +54,6 @@ export default async function ContestDetailPage({ params }: ContestDetailPagePro
             <h1 className="text-3xl font-bold tracking-tight text-on-surface">
               {contest.title}
             </h1>
-            <p className="text-on-surface-variant font-medium">
-              Mã: {contest.code}
-            </p>
           </div>
         </div>
       </header>
@@ -66,7 +63,6 @@ export default async function ContestDetailPage({ params }: ContestDetailPagePro
         <EditForm
           contest={{
             id: contest.id,
-            code: contest.code,
             title: contest.title,
             description: contest.description,
             deadline: contest.deadline?.toISOString() || null,
@@ -77,7 +73,6 @@ export default async function ContestDetailPage({ params }: ContestDetailPagePro
         />
         <GroundTruthSection
           contestId={contest.id}
-          contestCode={contest.code}
           groundTruthPath={contest.groundTruthPath}
         />
       </div>

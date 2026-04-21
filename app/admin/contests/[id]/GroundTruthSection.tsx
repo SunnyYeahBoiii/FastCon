@@ -6,13 +6,11 @@ import { useRouter } from "next/navigation";
 
 interface GroundTruthSectionProps {
   contestId: string;
-  contestCode: string;
   groundTruthPath: string | null;
 }
 
 export default function GroundTruthSection({
   contestId,
-  contestCode,
   groundTruthPath,
 }: GroundTruthSectionProps) {
   const router = useRouter();
@@ -54,9 +52,6 @@ export default function GroundTruthSection({
   return (
     <div className="bg-surface-container-lowest rounded-xl shadow-[0_4px_24px_rgba(25,28,30,0.04)] p-6">
       <h2 className="text-lg font-bold text-on-surface mb-4">
-        <span className="material-symbols-outlined inline-block mr-2" style={{ fontVariationSettings: "'FILL' 1" }}>
-          file_check
-        </span>
         File đáp án
       </h2>
 

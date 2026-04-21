@@ -12,7 +12,7 @@ export async function GET(
     select: {
       id: true,
       name: true,
-      email: true,
+      username: true,
       role: true,
       createdAt: true,
       submissions: {
@@ -27,7 +27,6 @@ export async function GET(
           contest: {
             select: {
               id: true,
-              code: true,
               title: true,
             },
           },
@@ -51,20 +50,20 @@ export async function PUT(
 
   try {
     const body = await request.json();
-    const { name, email, role } = body;
+    const { name, username, role } = body;
 
-    const updateData: { name?: string; email?: string; role?: string } = {};
+    const updateData: { name?: string; username?: string; role?: string } = {};
     if (name) updateData.name = name;
-    if (email) updateData.email = email;
+    if (username) updateData.username = username;
     if (role) updateData.role = role;
 
-    if (email) {
+    if (username) {
       const existingUser = await prisma.user.findUnique({
-        where: { email },
+        where: { username },
       });
       if (existingUser && existingUser.id !== id) {
         return NextResponse.json(
-          { error: "Email đã tồn tại" },
+          { error: "Tên tài khoản đã tồn tại" },
           { status: 400 }
         );
       }
@@ -76,7 +75,7 @@ export async function PUT(
       select: {
         id: true,
         name: true,
-        email: true,
+        username: true,
         role: true,
         createdAt: true,
       },
@@ -99,7 +98,6 @@ export async function DELETE(
   const { id } = await params;
 
   try {
-    // Delete all submissions first (due to foreign key constraint)
     await prisma.submission.deleteMany({
       where: { userId: id },
     });

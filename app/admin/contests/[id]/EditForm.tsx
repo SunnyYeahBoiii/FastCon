@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation";
 
 interface Contest {
   id: string;
-  code: string;
   title: string;
   description: string | null;
   deadline: string | null;
@@ -18,7 +17,6 @@ export default function EditForm({ contest }: { contest: Contest }) {
   const router = useRouter();
   const [formData, setFormData] = useState({
     title: contest.title,
-    code: contest.code,
     description: contest.description || "",
     deadline: contest.deadline ? new Date(contest.deadline).toISOString().slice(0, 16) : "",
     dailySubmissionLimit: contest.dailySubmissionLimit?.toString() || "",
@@ -67,18 +65,6 @@ export default function EditForm({ contest }: { contest: Contest }) {
             type="text"
             value={formData.title}
             onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-            className="w-full px-4 py-2 bg-surface-container-highest rounded-lg border-none focus:ring-0 focus:border-b-2 focus:border-b-primary focus:bg-surface-container-lowest transition-colors text-sm text-on-surface"
-          />
-        </div>
-
-        <div>
-          <label className="block text-sm font-medium text-on-surface-variant mb-1">
-            Mã cuộc thi
-          </label>
-          <input
-            type="text"
-            value={formData.code}
-            onChange={(e) => setFormData({ ...formData, code: e.target.value })}
             className="w-full px-4 py-2 bg-surface-container-highest rounded-lg border-none focus:ring-0 focus:border-b-2 focus:border-b-primary focus:bg-surface-container-lowest transition-colors text-sm text-on-surface"
           />
         </div>

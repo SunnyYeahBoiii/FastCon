@@ -4,6 +4,26 @@ import { mkdir, writeFile } from "fs/promises";
 import path from "path";
 import { runJudge } from "@/lib/judge";
 
+export async function GET() {
+  try {
+    const submissions = await prisma.submission.findMany({
+      orderBy: { createdAt: "desc" },
+      include: {
+        user: {
+          select: { id: true, name: true, username: true },
+        },
+        contest: {
+          select: { id: true, title: true },
+        },
+      },
+    });
+    return NextResponse.json({ submissions });
+  } catch (error) {
+    console.error("Fetch submissions error:", error);
+    return NextResponse.json({ ok: false, error: "Internal server error" }, { status: 500 });
+  }
+}
+
 export async function POST(request: NextRequest) {
   try {
     const formData = await request.formData();
