@@ -74,13 +74,11 @@ export default async function ContestDetailPage({ params }: ContestDetailPagePro
             dailySubmissionLimit: contest.dailySubmissionLimit,
             groundTruthPath: contest.groundTruthPath,
           }}
-          onSaveSuccess={() => {}}
         />
         <GroundTruthSection
           contestId={contest.id}
           contestCode={contest.code}
           groundTruthPath={contest.groundTruthPath}
-          onUploadSuccess={() => {}}
         />
       </div>
 

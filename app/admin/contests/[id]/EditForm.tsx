@@ -14,12 +14,7 @@ interface Contest {
   groundTruthPath: string | null;
 }
 
-interface EditFormProps {
-  contest: Contest;
-  onSaveSuccess: () => void;
-}
-
-export default function EditForm({ contest, onSaveSuccess }: EditFormProps) {
+export default function EditForm({ contest }: { contest: Contest }) {
   const router = useRouter();
   const [formData, setFormData] = useState({
     title: contest.title,
@@ -42,7 +37,6 @@ export default function EditForm({ contest, onSaveSuccess }: EditFormProps) {
 
       const data = await response.json();
       if (data.ok) {
-        onSaveSuccess();
         router.refresh();
       } else {
         alert(data.error || "Không thể cập nhật cuộc thi");

@@ -2,20 +2,20 @@
 
 import { useState, useRef } from "react";
 import { Upload } from "lucide-react";
+import { useRouter } from "next/navigation";
 
 interface GroundTruthSectionProps {
   contestId: string;
   contestCode: string;
   groundTruthPath: string | null;
-  onUploadSuccess: () => void;
 }
 
 export default function GroundTruthSection({
   contestId,
   contestCode,
   groundTruthPath,
-  onUploadSuccess,
 }: GroundTruthSectionProps) {
+  const router = useRouter();
   const [uploading, setUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -35,7 +35,7 @@ export default function GroundTruthSection({
 
       const data = await response.json();
       if (data.ok) {
-        onUploadSuccess();
+        router.refresh();
       } else {
         alert(data.error || "Không thể upload file");
       }
