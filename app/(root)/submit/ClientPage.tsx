@@ -13,6 +13,7 @@ interface Submission {
   filename: string;
   status: string;
   score: number | null;
+  metrics: string | null;
   createdAt: string;
   contest: { id: string; title: string };
 }
@@ -33,7 +34,7 @@ export default function SubmitPage({ userId }: { userId: string }) {
       .catch(console.error);
   }, []);
 
-  // Fetch my submissions
+  // Fetch initial submissions
   const fetchMySubmissions = useCallback(() => {
     fetch(`/api/submissions/user?userId=${userId}`)
       .then((res) => res.json())
@@ -44,6 +45,37 @@ export default function SubmitPage({ userId }: { userId: string }) {
   useEffect(() => {
     fetchMySubmissions();
   }, [fetchMySubmissions]);
+
+  // SSE connection for real-time status updates
+  useEffect(() => {
+    const eventSource = new EventSource(
+      `/api/submissions/stream?userId=${userId}`
+    );
+
+    eventSource.onmessage = (event) => {
+      const data = JSON.parse(event.data);
+      if (data.type === "initial") {
+        setMySubmissions(data.submissions || []);
+      } else if (data.type === "update") {
+        const { submissionId, status, score, metrics } = data;
+        setMySubmissions((prev) =>
+          prev.map((sub) =>
+            sub.id === submissionId
+              ? { ...sub, status, score: score ?? sub.score, metrics: metrics ?? sub.metrics }
+              : sub
+          )
+        );
+      } else if (data.type === "poll_update") {
+        setMySubmissions(data.submissions || []);
+      }
+    };
+
+    eventSource.onerror = () => {
+      eventSource.close();
+    };
+
+    return () => eventSource.close();
+  }, [userId]);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -221,31 +253,12 @@ export default function SubmitPage({ userId }: { userId: string }) {
         <div className="mt-8">
           <h2 className="text-xl font-bold text-on-surface mb-4">Bài nộp của tôi</h2>
           <div className="space-y-3">
-            {mySubmissions.map((sub) => (
-              <div
-                key={sub.id}
-                className="bg-surface-container-lowest rounded-lg p-4 shadow-[0_2px_12px_rgba(25,28,30,0.03)] flex items-center justify-between"
-              >
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 mb-1">
-                    <span className="font-medium text-on-surface truncate">
-                      {sub.contest.title}
-                    </span>
-                    <StatusBadge status={sub.status} />
-                  </div>
-                  <div className="text-xs text-on-surface-variant">
-                    {new Date(sub.createdAt).toLocaleString("vi-VN")} · {sub.filename}
-                  </div>
-                </div>
-                <div className="ml-4 text-right">
-                  {sub.score !== null ? (
-                    <span className="text-lg font-bold text-primary">{sub.score.toFixed(1)}</span>
-                  ) : (
-                    <span className="text-sm text-on-surface-variant">--</span>
-                  )}
-                </div>
-              </div>
-            ))}
+            {mySubmissions.map((sub) => {
+              const errorInfo = getErrorFromMetrics(sub.metrics);
+              return (
+                <SubmissionCard key={sub.id} sub={sub} error={errorInfo} />
+              );
+            })}
           </div>
         </div>
       )}
@@ -256,8 +269,9 @@ export default function SubmitPage({ userId }: { userId: string }) {
 function StatusBadge({ status }: { status: string }) {
   const config = {
     graded: { icon: CheckCircle, bg: "bg-primary-container/20", text: "text-primary", label: "Đã chấm" },
+    queued: { icon: Clock, bg: "bg-surface-container-high", text: "text-on-surface-variant", label: "Đang chờ" },
+    running: { icon: Clock, bg: "bg-tertiary-container/20", text: "text-tertiary", label: "Đang chấm", pulse: true },
     uploaded: { icon: Clock, bg: "bg-surface-container-high", text: "text-on-surface-variant", label: "Đang chờ" },
-    grading: { icon: Clock, bg: "bg-tertiary-container/20", text: "text-tertiary", label: "Đang chấm" },
     failed: { icon: AlertCircle, bg: "bg-error-container/20", text: "text-error", label: "Thất bại" },
     error: { icon: AlertCircle, bg: "bg-error-container/20", text: "text-error", label: "Lỗi" },
   } as const;
@@ -266,9 +280,63 @@ function StatusBadge({ status }: { status: string }) {
   const Icon = c.icon;
 
   return (
-    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${c.bg} ${c.text}`}>
+    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${c.bg} ${c.text} ${"pulse" in c && c.pulse ? "animate-pulse" : ""}`}>
       <Icon className="w-3 h-3" />
       {c.label}
     </span>
+  );
+}
+
+function getErrorFromMetrics(metrics: string | null): string | null {
+  if (!metrics) return null;
+  try {
+    const parsed = JSON.parse(metrics);
+    return parsed.error || null;
+  } catch {
+    return null;
+  }
+}
+
+function SubmissionCard({ sub, error }: { sub: Submission; error: string | null }) {
+  const [showError, setShowError] = useState(false);
+
+  return (
+    <div className="bg-surface-container-lowest rounded-lg p-4 shadow-[0_2px_12px_rgba(25,28,30,0.03)]">
+      <div className="flex items-center justify-between">
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 mb-1">
+            <span className="font-medium text-on-surface truncate">{sub.contest.title}</span>
+            <StatusBadge status={sub.status} />
+          </div>
+          <div className="text-xs text-on-surface-variant">
+            {new Date(sub.createdAt).toLocaleString("vi-VN")} · {sub.filename}
+          </div>
+        </div>
+        <div className="ml-4 text-right">
+          {sub.score !== null ? (
+            <span className="text-lg font-bold text-primary">{sub.score.toFixed(1)}</span>
+          ) : (
+            <span className="text-sm text-on-surface-variant">--</span>
+          )}
+        </div>
+      </div>
+
+      {error && sub.status === "failed" && (
+        <div className="mt-3">
+          <button
+            onClick={() => setShowError(!showError)}
+            className="text-xs text-error flex items-center gap-1 hover:underline"
+          >
+            <AlertCircle className="w-3 h-3" />
+            {showError ? "Ẩn lỗi" : "Xem lỗi chấm bài"}
+          </button>
+          {showError && (
+            <pre className="mt-2 p-3 bg-error-container/20 rounded-lg text-xs font-mono text-on-surface whitespace-pre-wrap break-words max-h-48 overflow-y-auto border border-error-container/30">
+              {error}
+            </pre>
+          )}
+        </div>
+      )}
+    </div>
   );
 }
