@@ -174,91 +174,89 @@ export default function SubmissionsPage() {
       </div>
 
       {/* Submissions Table */}
-      <div className="bg-surface-container-low rounded-lg p-1">
-        <div className="bg-surface-container-lowest rounded-lg shadow-[0_4px_24px_rgba(25,28,30,0.04)] overflow-hidden">
-          <table className="w-full text-left border-collapse">
-            <thead>
-              <tr className="bg-surface-container text-on-surface-variant text-sm font-semibold tracking-wide border-b border-surface-variant/50">
-                <th className="py-4 px-6 font-medium">Tên người nộp</th>
-                <th className="py-4 px-6 font-medium">Cuộc thi</th>
-                <th className="py-4 px-6 font-medium text-right">Số điểm</th>
-                <th className="py-4 px-6 font-medium text-right">Thời gian nộp</th>
-                <th className="py-4 px-6 font-medium text-center">Thao tác</th>
+      <div className="bg-surface-container-lowest rounded-lg shadow-[0_4px_24px_rgba(25,28,30,0.04)] overflow-hidden">
+        <table className="w-full text-left border-collapse">
+          <thead>
+            <tr className="bg-surface-container text-on-surface-variant text-sm font-semibold tracking-wide border-b border-surface-container">
+              <th className="py-4 px-6 font-medium">Tên người nộp</th>
+              <th className="py-4 px-6 font-medium">Cuộc thi</th>
+              <th className="py-4 px-6 font-medium text-right">Số điểm</th>
+              <th className="py-4 px-6 font-medium text-right">Thời gian nộp</th>
+              <th className="py-4 px-6 font-medium text-center">Thao tác</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-surface-container/50">
+            {loading ? (
+              <tr>
+                <td colSpan={5} className="py-8 text-center text-on-surface-variant">
+                  Đang tải...
+                </td>
               </tr>
-            </thead>
-            <tbody className="divide-y divide-surface-container/50">
-              {loading ? (
-                <tr>
-                  <td colSpan={5} className="py-8 text-center text-on-surface-variant">
-                    Đang tải...
-                  </td>
-                </tr>
-              ) : filteredSubmissions.length === 0 ? (
-                <tr>
-                  <td colSpan={5} className="py-8 text-center text-on-surface-variant">
-                    Không tìm thấy bài nộp
-                  </td>
-                </tr>
-              ) : (
-                filteredSubmissions.map((submission) => {
-                  const scoreBadge = getScoreBadge(submission.score);
-                  return (
-                    <tr key={submission.id} className="hover:bg-surface-container-low/30 transition-colors group">
-                      <td className="py-4 px-6">
-                        <div className="flex items-center gap-3">
-                          <div className="w-8 h-8 rounded-full bg-secondary-container text-on-secondary-container flex items-center justify-center font-bold text-xs">
-                            {getInitials(submission.user.name)}
-                          </div>
-                          <div>
-                            <div className="font-medium text-on-surface">{submission.user.name}</div>
-                            <div className="text-xs text-on-surface-variant">{submission.user.username}</div>
-                          </div>
+            ) : filteredSubmissions.length === 0 ? (
+              <tr>
+                <td colSpan={5} className="py-8 text-center text-on-surface-variant">
+                  Không tìm thấy bài nộp
+                </td>
+              </tr>
+            ) : (
+              filteredSubmissions.map((submission) => {
+                const scoreBadge = getScoreBadge(submission.score);
+                return (
+                  <tr key={submission.id} className="hover:bg-surface-container-low/30 transition-colors group">
+                    <td className="py-4 px-6">
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 rounded-full bg-secondary-container text-on-secondary-container flex items-center justify-center font-bold text-xs">
+                          {getInitials(submission.user.name)}
                         </div>
-                      </td>
-                      <td className="py-4 px-6">
-                        <span className="text-on-surface font-medium">{submission.contest.title}</span>
-                      </td>
-                      <td className="py-4 px-6 text-right">
-                        <span className={`px-2 py-1 rounded text-sm font-medium ${scoreBadge.bg} ${scoreBadge.text}`}>
-                          {submission.score !== null ? submission.score.toFixed(1) : "Chưa chấm"}
+                        <div>
+                          <div className="font-medium text-on-surface">{submission.user.name}</div>
+                          <div className="text-xs text-on-surface-variant">{submission.user.username}</div>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="py-4 px-6">
+                      <span className="text-on-surface font-medium">{submission.contest.title}</span>
+                    </td>
+                    <td className="py-4 px-6 text-right">
+                      <span className={`px-2 py-1 rounded text-sm font-medium ${scoreBadge.bg} ${scoreBadge.text}`}>
+                        {submission.score !== null ? submission.score.toFixed(1) : "Chưa chấm"}
+                      </span>
+                    </td>
+                    <td className="py-4 px-6 text-right">
+                      <div className="flex flex-col items-end">
+                        <span className="text-sm text-on-surface">
+                          {formatDate(submission.createdAt)}
                         </span>
-                      </td>
-                      <td className="py-4 px-6 text-right">
-                        <div className="flex flex-col items-end">
-                          <span className="text-sm text-on-surface">
-                            {formatDate(submission.createdAt)}
-                          </span>
-                          <span className="text-xs text-on-surface-variant">{formatTime(submission.createdAt)}</span>
-                        </div>
-                      </td>
-                      <td className="py-4 px-6 text-center">
-                        <button className="p-1.5 text-primary hover:bg-surface-container-high rounded-lg transition-colors inline-flex items-center justify-center" title="Xem chi tiết">
-                          <Eye className="w-5 h-5" />
-                        </button>
-                      </td>
-                    </tr>
-                  );
-                })
-              )}
-            </tbody>
-          </table>
+                        <span className="text-xs text-on-surface-variant">{formatTime(submission.createdAt)}</span>
+                      </div>
+                    </td>
+                    <td className="py-4 px-6 text-center">
+                      <button className="p-1.5 text-primary hover:bg-surface-container-high rounded-lg transition-colors inline-flex items-center justify-center" title="Xem chi tiết">
+                        <Eye className="w-5 h-5" />
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })
+            )}
+          </tbody>
+        </table>
 
-          {/* Pagination */}
-          <div className="flex items-center justify-between px-6 py-4 bg-surface-container-lowest border-t border-surface-variant/50">
-            <span className="text-sm text-on-surface-variant">
-              Hiển thị 1 - {filteredSubmissions.length} của {submissions.length} bài nộp
-            </span>
-            <div className="flex gap-1">
-              <button className="p-1 rounded-lg hover:bg-surface-container-high transition-colors text-on-surface-variant">
-                <span className="material-symbols-outlined">chevron_left</span>
-              </button>
-              <button className="w-8 h-8 flex items-center justify-center rounded-lg bg-primary text-on-primary text-sm font-medium">
-                1
-              </button>
-              <button className="p-1 rounded-lg hover:bg-surface-container-high transition-colors text-on-surface-variant">
-                <span className="material-symbols-outlined">chevron_right</span>
-              </button>
-            </div>
+        {/* Pagination */}
+        <div className="flex items-center justify-between px-6 py-4 bg-surface-container-lowest border-t border-surface-container">
+          <span className="text-sm text-on-surface-variant">
+            Hiển thị 1 - {filteredSubmissions.length} của {submissions.length} bài nộp
+          </span>
+          <div className="flex gap-1">
+            <button className="p-1 rounded-lg hover:bg-surface-container-high transition-colors text-on-surface-variant">
+              <span className="material-symbols-outlined">chevron_left</span>
+            </button>
+            <button className="w-8 h-8 flex items-center justify-center rounded-lg bg-primary text-on-primary text-sm font-medium">
+              1
+            </button>
+            <button className="p-1 rounded-lg hover:bg-surface-container-high transition-colors text-on-surface-variant">
+              <span className="material-symbols-outlined">chevron_right</span>
+            </button>
           </div>
         </div>
       </div>

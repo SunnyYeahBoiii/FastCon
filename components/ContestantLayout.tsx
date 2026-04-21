@@ -1,9 +1,9 @@
 "use client";
 
-import { Home, Trophy, Upload, Sun, Moon, LogOut, User } from "lucide-react";
+import { Home, Trophy, Upload, LogOut, User } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useTheme } from "@/lib/theme";
+import { ThemeToggle } from "@/components/ThemeToggle";
 
 const navItems = [
   { name: "Home", href: "/", icon: Home },
@@ -22,7 +22,6 @@ export default function ContestantLayout({
 }: ContestantLayoutProps) {
   const pathname = usePathname();
   const router = useRouter();
-  const { isDark, toggle: toggleTheme } = useTheme();
 
   const handleLogout = async () => {
     await fetch("/api/logout", { method: "POST" });
@@ -83,13 +82,7 @@ export default function ContestantLayout({
                 Đăng nhập
               </Link>
             )}
-            <button
-              onClick={toggleTheme}
-              className="p-2 rounded hover:bg-surface-container-high/20 transition-colors"
-              aria-label="Toggle theme"
-            >
-              {isDark ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
-            </button>
+            <ThemeToggle />
           </div>
         </div>
       </header>
