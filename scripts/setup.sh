@@ -1,12 +1,22 @@
 #!/bin/bash
-set -e
+set -euo pipefail
 
-echo "========================================"
-echo "  FastCons - Setup Script"
-echo "========================================"
-echo ""
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+WEB_DIR="$ROOT_DIR/apps/web"
+API_DIR="$ROOT_DIR/apps/api"
+STORAGE_DIR="$ROOT_DIR/storage"
+DATABASE_PATH="$ROOT_DIR/dev.db"
+WEB_ENV_FILE="$WEB_DIR/.env.local"
+API_ENV_FILE="$API_DIR/.env.local"
+FASTAPI_INTERNAL_URL="http://127.0.0.1:8010"
+PYTHON_BIN_DEFAULT="$(command -v python3 || true)"
+PYTHON_BIN="${PYTHON_BIN_DEFAULT:-python3}"
+WORKER_POLL_MS="${WORKER_POLL_MS:-1000}"
+WORKER_MAX_CONCURRENT="${WORKER_MAX_CONCURRENT:-3}"
+JUDGE_TIMEOUT_SECONDS="${JUDGE_TIMEOUT_SECONDS:-120}"
+MAX_UPLOAD_BYTES="${MAX_UPLOAD_BYTES:-10485760}"
 
-# Colors
 GREEN='\033[0;32m'
 RED='\033[0;31m'
 YELLOW='\033[1;33m'
@@ -16,183 +26,81 @@ info()  { echo -e "${GREEN}[✓]${NC} $1"; }
 warn()  { echo -e "${YELLOW}[!]${NC} $1"; }
 error() { echo -e "${RED}[✗]${NC} $1"; }
 
-# Detect package manager
-detect_pkg_manager() {
-    if command -v brew &> /dev/null; then
-        echo "brew"
-    elif command -v apt-get &> /dev/null; then
-        echo "apt-get"
-    elif command -v yum &> /dev/null; then
-        echo "yum"
-    elif command -v dnf &> /dev/null; then
-        echo "dnf"
-    elif command -v pacman &> /dev/null; then
-        echo "pacman"
-    else
-        echo ""
-    fi
-}
-
-PKG_MGR=$(detect_pkg_manager)
-
-install_pkg() {
+require_command() {
     local name="$1"
-    if [ -n "$PKG_MGR" ]; then
-        case "$PKG_MGR" in
-            brew)    brew install "$name" ;;
-            apt-get) sudo apt-get update && sudo apt-get install -y "$name" ;;
-            yum)     sudo yum install -y "$name" ;;
-            dnf)     sudo dnf install -y "$name" ;;
-            pacman)  sudo pacman -S --noconfirm "$name" ;;
-        esac
-    else
-        error "No package manager found. Install $name manually."
+    if ! command -v "$name" >/dev/null 2>&1; then
+        error "Missing required command: $name"
         exit 1
     fi
 }
 
-# --- Check / Install prerequisites ---
-echo "--- Checking prerequisites ---"
-
-# Node.js
-if ! command -v node &> /dev/null; then
-    warn "Node.js not found. Installing..."
-    install_pkg "node"
-fi
-NODE_VER=$(node -v | cut -d'v' -f2 | cut -d'.' -f1)
-if [ "$NODE_VER" -lt 20 ]; then
-    warn "Node.js version $NODE_VER < 20. Upgrading..."
-    if [ "$PKG_MGR" = "brew" ]; then
-        brew upgrade node
-    elif [ "$PKG_MGR" = "apt-get" ]; then
-        curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
-        sudo apt-get install -y nodejs
-    else
-        error "Cannot auto-upgrade Node.js. Install Node.js >= 20 manually."
-        exit 1
-    fi
-fi
-info "Node.js $(node -v)"
-
-# Python3
-if ! command -v python3 &> /dev/null; then
-    warn "Python3 not found. Installing..."
-    install_pkg "python3"
-fi
-info "Python $(python3 --version 2>&1)"
-
-# pip3
-if ! command -v pip3 &> /dev/null; then
-    warn "pip3 not found. Installing..."
-    if [ "$PKG_MGR" = "brew" ]; then
-        brew install python3
-    elif [ "$PKG_MGR" = "apt-get" ]; then
-        sudo apt-get install -y python3-pip
-    else
-        python3 -m ensurepip --upgrade 2>/dev/null || install_pkg "python3-pip"
-    fi
-fi
-info "pip3 installed"
-
-# npm
-if ! command -v npm &> /dev/null; then
-    warn "npm not found. Installing..."
-    install_pkg "npm"
-fi
-info "npm $(npm -v)"
-
-echo ""
-
-# --- Install dependencies ---
-echo "--- Installing npm dependencies ---"
-npm install
-info "Dependencies installed"
-
-echo ""
-
-# --- Install Python dependencies ---
-echo "--- Installing Python dependencies ---"
-pip3 install --user numpy pandas
-info "Python dependencies installed"
-
-echo ""
-
-# --- Setup environment ---
-echo "--- Setting up environment ---"
-if [ ! -f .env.local ]; then
-    if [ -f .env.example ]; then
-        cp .env.example .env.local
-        info "Created .env.local from .env.example"
-    else
-        cat > .env.local << 'EOF'
-DATABASE_URL="file:./dev.db"
-MAX_CONCURRENT_JUDGES=3
-PYTHON_BIN="python3"
-UPLOAD_DIR="./storage/submissions"
+write_env_file() {
+    local target="$1"
+    cat > "$target" <<EOF
+DATABASE_URL="file:$DATABASE_PATH"
+STORAGE_ROOT="$STORAGE_DIR"
+FASTAPI_INTERNAL_URL="$FASTAPI_INTERNAL_URL"
+PYTHON_BIN="$PYTHON_BIN"
+WORKER_POLL_MS="$WORKER_POLL_MS"
+WORKER_MAX_CONCURRENT="$WORKER_MAX_CONCURRENT"
+JUDGE_TIMEOUT_SECONDS="$JUDGE_TIMEOUT_SECONDS"
+MAX_UPLOAD_BYTES="$MAX_UPLOAD_BYTES"
+UPLOAD_DIR="$STORAGE_DIR/submissions"
+MAX_CONCURRENT_JUDGES="$WORKER_MAX_CONCURRENT"
+SEED_ADMIN_PASSWORD="$ADMIN_PASSWORD"
 EOF
-        info "Created .env.local with defaults"
-    fi
-else
-    warn ".env.local already exists, skipping"
+}
+
+echo "========================================"
+echo "  FastCons - Workspace Setup"
+echo "========================================"
+echo ""
+
+require_command node
+require_command pnpm
+require_command python3
+
+if [ ! -d "$WEB_DIR" ] || [ ! -d "$API_DIR" ]; then
+    error "Expected apps/web and apps/api to exist. Did the workspace move complete?"
+    exit 1
 fi
 
-echo ""
+if [ ! -d "$ROOT_DIR/node_modules" ]; then
+    warn "Root dependencies are not installed yet."
+    warn "Run 'pnpm install' first, then rerun 'pnpm setup'."
+    exit 1
+fi
 
-# --- Create directories ---
-echo "--- Creating directories ---"
-mkdir -p storage/submissions
-info "Created storage/submissions"
+mkdir -p "$STORAGE_DIR/submissions" "$STORAGE_DIR/testdata"
+info "Ensured shared storage directories exist"
 
-echo ""
-
-# --- Admin password ---
-echo "--- Admin Account ---"
 read -rp "Enter admin password [admin123]: " ADMIN_PASSWORD
 ADMIN_PASSWORD="${ADMIN_PASSWORD:-admin123}"
 
-# Write password to .env.local
-ESCAPED_PASSWORD="${ADMIN_PASSWORD//\\/\\\\}"
-ESCAPED_PASSWORD="${ESCAPED_PASSWORD//\//\\/}"
-ESCAPED_PASSWORD="${ESCAPED_PASSWORD//&/\\&}"
+write_env_file "$WEB_ENV_FILE"
+write_env_file "$API_ENV_FILE"
+info "Wrote $WEB_ENV_FILE"
+info "Wrote $API_ENV_FILE"
 
-if grep -q "^SEED_ADMIN_PASSWORD=" .env.local 2>/dev/null; then
-    if [[ "$OSTYPE" == "darwin"* ]]; then
-        sed -i '' "s|^SEED_ADMIN_PASSWORD=.*|SEED_ADMIN_PASSWORD=\"${ESCAPED_PASSWORD}\"|" .env.local
-    else
-        sed -i "s|^SEED_ADMIN_PASSWORD=.*|SEED_ADMIN_PASSWORD=\"${ESCAPED_PASSWORD}\"|" .env.local
-    fi
-else
-    echo "SEED_ADMIN_PASSWORD=\"${ADMIN_PASSWORD}\"" >> .env.local
-fi
-info "Admin password set"
+pnpm --filter @repo/api setup:python
+info "Installed Python dependencies"
 
-echo ""
-
-# --- Database ---
-echo "--- Database ---"
-
-npx prisma db push --accept-data-loss
+pnpm --filter @repo/web db:push
 info "Database schema pushed"
 
-echo ""
-echo "--- Creating admin user ---"
-SEED_ADMIN_PASSWORD="$ADMIN_PASSWORD" npx tsx prisma/seed.ts --admin-only
-info "Admin user created"
+SEED_ADMIN_PASSWORD="$ADMIN_PASSWORD" pnpm --filter @repo/web seed -- --admin-only
+info "Admin user created or updated"
 
 echo ""
 echo "========================================"
-echo "  Setup complete!"
+echo "  Setup complete"
 echo "========================================"
 echo ""
 echo "Admin credentials:"
 echo "  Username: admin"
-echo "  Password: ${ADMIN_PASSWORD}"
+echo "  Password: $ADMIN_PASSWORD"
 echo ""
-echo "Build and start:"
-echo "  npm run build && npm run start"
-echo ""
-echo "Or one command:"
-echo "  npm run deploy"
-echo ""
-echo "Then open http://localhost:3000"
-echo ""
+echo "Runtime commands:"
+echo "  pnpm dev"
+echo "  pnpm dev:web"
+echo "  pnpm dev:api"

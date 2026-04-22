@@ -1,20 +1,12 @@
 #!/bin/bash
-set -e
+set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
-# --- Run setup ---
-bash "$SCRIPT_DIR/scripts/setup.sh"
+cd "$SCRIPT_DIR"
+pnpm install
+pnpm setup
 
 echo ""
-
-# --- Build ---
-echo "--- Building ---"
-npm run build
-info "Build complete"
-
-echo ""
-
-# --- Start ---
-echo "--- Starting server ---"
-bash "$SCRIPT_DIR/scripts/run.sh" --no-setup
+echo "Setup complete. Start the workspace with:"
+echo "  pnpm dev"

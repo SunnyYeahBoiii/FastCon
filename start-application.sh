@@ -1,17 +1,19 @@
 #!/bin/bash
-set -e
+set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
 echo "========================================"
-echo "  FastCons - Build + Start"
+echo "  FastCons - Runtime"
 echo "========================================"
 echo ""
 
-# First-time check: if no .env.local, suggest first-run.sh
-if [ ! -f "$SCRIPT_DIR/.env.local" ]; then
-    echo "Project not yet set up. Run first-run.sh instead."
+if [ ! -f "$SCRIPT_DIR/apps/web/.env.local" ] || [ ! -f "$SCRIPT_DIR/apps/api/.env.local" ]; then
+    echo "Project not yet set up. Run 'pnpm setup' first."
     exit 1
 fi
 
-bash "$SCRIPT_DIR/scripts/run.sh" --no-setup
+echo "Workspace runtime commands:"
+echo "  pnpm dev"
+echo "  pnpm dev:web"
+echo "  pnpm dev:api"

@@ -1,54 +1,67 @@
 # FastCons — Setup & Run Guide
 
-Contest evaluation platform. Next.js 16 + Prisma + SQLite + Python judge.
+Contest evaluation platform. Next.js 16 + FastAPI + Prisma + SQLite + Python judge, organized as a pnpm workspace managed by Turborepo.
 
 ## Requirements
 
 | Tool | Version | Auto-installed |
 |------|---------|----------------|
-| Node.js | >= 20 | Yes (via brew/apt/yum/dnf/pacman) |
-| Python | >= 3.9 | Yes (via brew/apt/yum/dnf/pacman) |
-| npm | >= 10 | Yes (via package manager) |
-| numpy | latest | Yes (via pip3) |
-| pandas | latest | Yes (via pip3) |
+| Node.js | >= 20 | No |
+| pnpm | 10.x | No |
+| Python | >= 3.9 | No |
 
 ## First-Time Setup
 
-### Option 1: All-in-one (recommended)
+### Recommended
 
 ```bash
-./first-run.sh
+pnpm install
+pnpm setup
+pnpm dev
 ```
 
-Auto-installs missing prerequisites, creates admin account, builds, and starts server.
+This installs the workspace, generates `apps/web/.env.local` and `apps/api/.env.local`, installs Python deps, pushes Prisma schema to the shared SQLite DB at the repo root, seeds the admin user, and starts both apps together.
 
-### Option 2: Step by step
+### Step by step
 
 ```bash
-# 1. Setup (auto-installs missing prerequisites, creates admin + DB)
-./scripts/setup.sh
+# 1. Install workspace dependencies
+pnpm install
 
-# 2. Build + Start (prompts for port, default 3000)
-./scripts/run.sh
+# 2. Generate envs, install Python deps, setup DB, seed admin
+pnpm setup
+
+# 3. Start both apps
+pnpm dev
 ```
 
 ## Subsequent Runs
 
 ```bash
-./start-application.sh
+pnpm dev
 ```
 
-Builds and starts the server. Prompts for custom port.
-
-## npm Commands
+Or run either app directly:
 
 ```bash
-npm run build   # build for production
-npm run start   # start production server
-npm run dev     # development server with hot reload
+pnpm dev:web
+pnpm dev:api
 ```
 
-Open http://localhost:3000 (or your custom port)
+## Workspace Commands
+
+```bash
+pnpm build
+pnpm lint
+pnpm check-types
+pnpm dev
+pnpm dev:web
+pnpm dev:api
+pnpm db:push
+pnpm seed
+```
+
+Open `http://localhost:3000`. The internal FastAPI service runs on `http://127.0.0.1:8010`.
 
 ## Manual Setup Steps
 
@@ -57,42 +70,51 @@ If the automated script fails, follow these steps:
 ### Step 1: Install dependencies
 
 ```bash
-npm install
+pnpm install
 ```
 
 ### Step 2: Environment variables
 
-Copy `.env.example` to `.env.local`:
+`scripts/setup.sh` is the source of truth. It writes:
 
 ```bash
-cp .env.example .env.local
+apps/web/.env.local
+apps/api/.env.local
 ```
 
-Edit `.env.local` if needed. Defaults work for local development.
+Both files contain the same resolved absolute values for:
+
+- `DATABASE_URL`
+- `STORAGE_ROOT`
+- `FASTAPI_INTERNAL_URL`
+- `PYTHON_BIN`
+- `WORKER_POLL_MS`
+- `WORKER_MAX_CONCURRENT`
+- `JUDGE_TIMEOUT_SECONDS`
+- `MAX_UPLOAD_BYTES`
+- `UPLOAD_DIR`
+- `MAX_CONCURRENT_JUDGES`
 
 ### Step 3: Database
 
 ```bash
-# Push schema to SQLite
-npx prisma db push
-
-# Create admin account
-npx tsx prisma/seed.ts --admin-only
+pnpm db:push
+SEED_ADMIN_PASSWORD=admin123 pnpm --filter @repo/web seed -- --admin-only
 ```
 
-### Step 4: Build
+### Step 4: Start FastAPI
 
 ```bash
-npm run build
+pnpm dev:api
 ```
 
-### Step 5: Start server
+### Step 5: Start Next.js
 
 ```bash
-npm run start
+pnpm dev:web
 ```
 
-Open http://localhost:3000 (or your custom port)
+Open `http://localhost:3000`
 
 ## Default Accounts
 
@@ -104,40 +126,33 @@ Open http://localhost:3000 (or your custom port)
 
 ```
 fast-con/
-├── app/                    # Next.js App Router
-│   ├── (root)/            # Public pages (user)
-│   │   ├── submit/        # Submit page
-│   │   ├── leaderboard/   # Leaderboard
-│   │   ├── profile/       # User profile page
-│   │   └── login/         # Login
-│   ├── admin/             # Admin panel
-│   │   ├── contests/      # Contest management
-│   │   ├── submissions/   # Submission review
-│   │   └── users/         # User management
-│   └── api/               # API routes
-│       ├── submissions/   # Submission + SSE stream
-│       ├── leaderboard/   # Leaderboard + SSE stream
-│       └── contests/      # Contest CRUD
-├── components/            # React components
+├── apps/
+│   ├── web/
+│   │   ├── app/                  # Next.js App Router
+│   │   ├── components/
+│   │   ├── lib/
+│   │   ├── prisma/
+│   │   ├── package.json
+│   │   └── proxy.ts              # Conditional rewrite to FastAPI
+│   └── api/
+│       ├── backend/              # FastAPI internal service
+│       ├── scripts/              # Judge runner + local Python helpers
+│       ├── requirements.txt
+│       └── package.json
+├── packages/
+│   ├── eslint-config/
+│   └── typescript-config/
 ├── scripts/
-│   ├── setup.sh           # Auto-setup script
-│   ├── run.sh             # Build + start with custom port
-│   └── judge_runner.py    # Python evaluation runner
-├── first-run.sh           # First-time: setup + build + start
-├── start-application.sh   # Build + start (subsequent runs)
-├── lib/
-│   ├── db.ts             # Prisma client
-│   ├── queue.ts          # Judge queue (in-memory + SQLite)
-│   ├── judge.ts          # Python process spawner with concurrency limit
-│   ├── events.ts         # Event emitter for SSE
-│   ├── session.ts        # Cookie-based session
-│   ├── auth.ts           # Password hashing
-│   ├── guard.ts          # Auth middleware guard
-│   └── evaluateTemplates.ts  # Default evaluate template
-├── prisma/
-│   ├── schema.prisma     # Database schema
-│   └── seed.ts           # Seed script (admin only)
-└── proxy.ts              # CORS proxy middleware
+│   ├── setup.sh                 # Workspace bootstrap source of truth
+│   ├── run-api.sh               # Compatibility wrapper to pnpm dev:api
+│   ├── run-web.sh               # Compatibility wrapper to pnpm dev:web
+│   └── run.sh                   # Compatibility wrapper to web only
+├── storage/                     # Shared filesystem storage
+├── dev.db                       # Shared SQLite database
+├── first-run.sh
+├── start-application.sh
+├── pnpm-workspace.yaml
+└── turbo.json
 ```
 
 ## Configuration
@@ -146,23 +161,16 @@ fast-con/
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| DATABASE_URL | file:./dev.db | SQLite database path |
-| MAX_CONCURRENT_JUDGES | 3 | Max parallel judge processes |
+| DATABASE_URL | `file:/abs/path/to/dev.db` | Shared SQLite database path |
+| STORAGE_ROOT | `/abs/path/to/storage` | Shared storage root |
+| FASTAPI_INTERNAL_URL | http://127.0.0.1:8010 | Next rewrite target for submissions/leaderboard |
 | PYTHON_BIN | python3 | Python executable path |
-| ADMIN_EMAIL | admin@example.com | Default admin email |
-| ADMIN_PASSWORD | admin123 | Default admin password |
-| UPLOAD_DIR | ./storage/submissions | Uploaded files directory |
-| CORS_ORIGIN | - | Allowed CORS origin (for ngrok) |
-
-### Ngrok (External Access)
-
-```bash
-# Start ngrok
-ngrok http 3000
-
-# Set CORS origin in .env.local
-CORS_ORIGIN="https://xxxx.ngrok-free.app"
-```
+| WORKER_POLL_MS | 1000 | Worker poll interval |
+| WORKER_MAX_CONCURRENT | 3 | Max parallel judge processes |
+| JUDGE_TIMEOUT_SECONDS | 120 | Per-submission judge timeout |
+| MAX_UPLOAD_BYTES | 10485760 | Upload size limit in bytes |
+| UPLOAD_DIR | ./storage/submissions | Legacy alias for one transition release |
+| MAX_CONCURRENT_JUDGES | 3 | Legacy alias for one transition release |
 
 ## Troubleshooting
 
@@ -171,15 +179,14 @@ CORS_ORIGIN="https://xxxx.ngrok-free.app"
 # Check Python path
 which python3
 
-# Set in .env.local if different
-PYTHON_BIN="/path/to/python3"
+# Rerun setup after fixing the interpreter path
+pnpm setup
 ```
 
 ### Database locked
 ```bash
 # Reset database
-npx prisma db push --accept-data-loss
-npx tsx prisma/seed.ts --admin-only
+pnpm --filter @repo/web db:reset
 ```
 
 ### Port already in use
@@ -191,5 +198,6 @@ lsof -ti:3000 | xargs kill
 ### Judge process fails
 ```bash
 # Test Python judge directly
+cd apps/api
 python3 scripts/judge_runner.py <submission_id>
 ```

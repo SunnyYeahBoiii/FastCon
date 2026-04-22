@@ -1,0 +1,12 @@
+{
+  "name": "@repo/api",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "bash -lc 'set -a; [ -f ./.env.local ] && source ./.env.local; set +a; exec \"${PYTHON_BIN:-python3}\" -m uvicorn backend.main:app --host 127.0.0.1 --port 8010 --reload'",
+    "start": "bash -lc 'set -a; [ -f ./.env.local ] && source ./.env.local; set +a; exec \"${PYTHON_BIN:-python3}\" -m uvicorn backend.main:app --host 127.0.0.1 --port 8010'",
+    "build": "bash -lc 'set -a; [ -f ./.env.local ] && source ./.env.local; set +a; exec \"${PYTHON_BIN:-python3}\" -m compileall backend scripts/judge_runner.py scripts/test_pickle.py'",
+    "check-types": "bash -lc 'set -a; [ -f ./.env.local ] && source ./.env.local; set +a; exec \"${PYTHON_BIN:-python3}\" -m compileall backend scripts/judge_runner.py scripts/test_pickle.py'",
+    "setup:python": "bash -lc 'set -a; [ -f ./.env.local ] && source ./.env.local; set +a; exec \"${PYTHON_BIN:-python3}\" -m pip install --user -r requirements.txt'"
+  }
+}

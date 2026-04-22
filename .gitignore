@@ -1,7 +1,7 @@
 # See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
 
 # dependencies
-/node_modules
+node_modules
 /.pnp
 .pnp.*
 .yarn/*
@@ -14,11 +14,13 @@
 /coverage
 
 # next.js
-/.next/
+.next/
+apps/*/.next/
 /out/
 
 # production
 /build
+dist
 
 # misc
 .DS_Store
@@ -33,10 +35,14 @@ yarn-error.log*
 # env files (can opt-in for committing if needed)
 .env
 .env.local
+apps/*/.env.local
 
 
 # vercel
 .vercel
+
+# turbo
+.turbo
 
 # typescript
 *.tsbuildinfo
@@ -51,7 +57,7 @@ next-env.d.ts
 *.db-wal
 
 # keep one starter DB for easy setup
-!prisma/dev.db
+!apps/web/prisma/dev.db
 docs
 
 # Python bytecode

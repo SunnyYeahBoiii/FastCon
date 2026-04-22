@@ -7,32 +7,39 @@ Contest evaluation platform with real-time judging.
 ### First time
 
 ```bash
-./first-run.sh
+pnpm install
+pnpm setup
+pnpm dev
 ```
 
-Cài dependencies, setup DB, tạo admin account, build và start server.
+Cài workspace dependencies, sinh `apps/web/.env.local` và `apps/api/.env.local`, setup DB dùng SQLite chung ở root, rồi chạy cả web + api qua Turborepo.
 
 ### Subsequent runs
 
 ```bash
-./start-application.sh
+pnpm dev
 ```
 
-Build và start server (custom port).
+Chạy đồng thời `@repo/web` trên `http://localhost:3000` và `@repo/api` trên `http://127.0.0.1:8010`.
 
 ### Individual scripts
 
 ```bash
-./scripts/setup.sh   # install deps + setup DB + create admin
-./scripts/run.sh     # build + start with custom port
+pnpm setup             # generate app envs + install Python deps + db push + seed admin
+pnpm dev:web           # Next public process
+pnpm dev:api           # FastAPI internal process
+./scripts/run-web.sh   # compatibility wrapper to pnpm dev:web
+./scripts/run-api.sh   # compatibility wrapper to pnpm dev:api
 ```
 
-### npm commands
+### Workspace commands
 
 ```bash
-npm run build   # build for production
-npm run start   # start production server
-npm run dev     # development server with hot reload
+pnpm build      # build workspace
+pnpm lint       # lint workspace
+pnpm check-types
+pnpm db:push    # Prisma db push in apps/web
+pnpm seed       # full seed in apps/web
 ```
 
 See [SETUP.md](./SETUP.md) for full documentation.
@@ -49,6 +56,7 @@ See [SETUP.md](./SETUP.md) for full documentation.
 ## Tech Stack
 
 - **Frontend:** Next.js 16, React 19, Tailwind CSS
-- **Backend:** Next.js API routes, SQLite (Prisma)
+- **Backend:** Next.js public routes + FastAPI internal APIs, SQLite (Prisma schema source)
 - **Judge:** Python subprocess with sandboxed execution
 - **Real-time:** Server-Sent Events (SSE)
+- **Workspace:** pnpm workspaces + Turborepo
