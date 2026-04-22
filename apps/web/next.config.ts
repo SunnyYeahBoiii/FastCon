@@ -6,6 +6,11 @@ const appRoot = path.dirname(fileURLToPath(import.meta.url));
 
 const nextConfig: NextConfig = {
   allowedDevOrigins: ["*.ngrok-free.app"],
+  serverExternalPackages: [
+    "@prisma/adapter-better-sqlite3",
+    "@prisma/client",
+    "better-sqlite3",
+  ],
   turbopack: {
     root: path.resolve(appRoot, "../.."),
   },

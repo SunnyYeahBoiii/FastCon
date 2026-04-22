@@ -34,22 +34,53 @@ require_command() {
     fi
 }
 
-ensure_pnpm() {
-    if command -v pnpm >/dev/null 2>&1; then
-        info "pnpm: $(pnpm --version)"
+ensure_node_and_npm() {
+    if command -v node >/dev/null 2>&1 && command -v npm >/dev/null 2>&1; then
+        info "node: $(node --version)"
+        info "npm: $(npm --version)"
         return
     fi
 
-    if command -v corepack >/dev/null 2>&1; then
-        step "Enabling pnpm via corepack..."
-        corepack enable
-        corepack prepare pnpm@10.33.0 --activate
-    else
-        step "Installing pnpm globally via npm..."
-        npm install -g pnpm
+    if command -v apt-get >/dev/null 2>&1; then
+        step "Installing nodejs and npm..."
+        if command -v sudo >/dev/null 2>&1; then
+            sudo apt-get update
+            sudo apt-get install -y nodejs npm
+        else
+            apt-get update
+            apt-get install -y nodejs npm
+        fi
+
+        if command -v node >/dev/null 2>&1 && command -v npm >/dev/null 2>&1; then
+            info "node: $(node --version)"
+            info "npm: $(npm --version)"
+            return
+        fi
     fi
 
-    info "pnpm installed: $(pnpm --version)"
+    error "Node.js and npm are required. Install them manually (or provide apt-get) and rerun setup."
+    exit 1
+}
+
+ensure_python_venv_support() {
+    if python3 -m venv --help >/dev/null 2>&1; then
+        return
+    fi
+
+    if command -v apt-get >/dev/null 2>&1; then
+        step "Installing python3-venv..."
+        if command -v sudo >/dev/null 2>&1; then
+            sudo apt-get update
+            sudo apt-get install -y python3-venv
+        else
+            apt-get update
+            apt-get install -y python3-venv
+        fi
+        return
+    fi
+
+    error "python3 venv support is missing. Install python3-venv (or the equivalent package for your OS) and rerun setup."
+    exit 1
 }
 
 echo "========================================"
@@ -59,12 +90,10 @@ echo ""
 
 # --- Step 1: Check prerequisites ---
 step "Checking prerequisites..."
-require_command node
-require_command npm
 require_command python3
-info "node: $(node --version)"
 info "python3: $(python3 --version)"
-ensure_pnpm
+ensure_node_and_npm
+ensure_python_venv_support
 echo ""
 
 # --- Step 2: Create and activate Python venv ---
@@ -90,7 +119,7 @@ echo ""
 # --- Step 4: Install Node dependencies ---
 step "Installing Node dependencies..."
 cd "$ROOT_DIR"
-pnpm install
+npm install
 info "Node dependencies installed"
 echo ""
 
@@ -143,15 +172,21 @@ info "Wrote $WEB_ENV_FILE"
 info "Wrote $API_ENV_FILE"
 echo ""
 
-# --- Step 8: Push database schema ---
+# --- Step 8: Generate Prisma client ---
+step "Generating Prisma client..."
+npm run prisma:generate
+info "Prisma client generated"
+echo ""
+
+# --- Step 9: Push database schema ---
 step "Pushing database schema..."
-pnpm db:push
+npm run db:push
 info "Database schema pushed"
 echo ""
 
-# --- Step 9: Seed admin user + sample contests ---
+# --- Step 10: Seed admin user + sample contests ---
 step "Seeding database..."
-SEED_ADMIN_PASSWORD="$ADMIN_PASSWORD" pnpm --filter @repo/web seed
+SEED_ADMIN_PASSWORD="$ADMIN_PASSWORD" npm run seed
 info "Database seeded"
 echo ""
 

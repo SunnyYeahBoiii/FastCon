@@ -1,28 +1,25 @@
 {
   "name": "fast-con",
   "private": true,
-  "packageManager": "pnpm@10.33.0",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "packageManager": "npm@11.12.1",
   "scripts": {
     "build": "turbo run build",
     "dev": "turbo run dev",
+    "start": "bash start-application.sh",
     "lint": "turbo run lint",
     "check-types": "turbo run check-types",
     "setup": "bash scripts/setup.sh",
-    "dev:web": "pnpm --filter @repo/web dev",
-    "dev:api": "pnpm --filter @repo/api dev",
-    "db:push": "pnpm --filter @repo/web db:push",
-    "seed": "pnpm --filter @repo/web seed"
+    "dev:web": "npm --workspace @repo/web run dev",
+    "dev:api": "npm --workspace @repo/api run dev",
+    "db:push": "npm --workspace @repo/web run db:push",
+    "seed": "npm --workspace @repo/web run seed",
+    "prisma:generate": "npm exec --workspace @repo/web prisma generate"
   },
   "devDependencies": {
     "turbo": "^2.9.6"
-  },
-  "pnpm": {
-    "onlyBuiltDependencies": [
-      "@prisma/engines",
-      "better-sqlite3",
-      "esbuild",
-      "prisma",
-      "sharp"
-    ]
   }
 }

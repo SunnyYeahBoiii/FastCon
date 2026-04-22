@@ -7,9 +7,9 @@ Contest evaluation platform with real-time judging.
 ### First time
 
 ```bash
-pnpm install
-pnpm setup
-pnpm dev
+npm install
+npm run setup
+npm run dev
 ```
 
 Cài workspace dependencies, sinh `apps/web/.env.local` và `apps/api/.env.local`, setup DB dùng SQLite chung ở root, rồi chạy cả web + api qua Turborepo.
@@ -17,7 +17,7 @@ Cài workspace dependencies, sinh `apps/web/.env.local` và `apps/api/.env.local
 ### Subsequent runs
 
 ```bash
-pnpm dev
+npm run dev
 ```
 
 Chạy đồng thời `@repo/web` trên `http://localhost:3000` và `@repo/api` trên `http://127.0.0.1:8010`.
@@ -25,21 +25,21 @@ Chạy đồng thời `@repo/web` trên `http://localhost:3000` và `@repo/api` 
 ### Individual scripts
 
 ```bash
-pnpm setup             # generate app envs + install Python deps + db push + seed admin
-pnpm dev:web           # Next public process
-pnpm dev:api           # FastAPI internal process
-./scripts/run-web.sh   # compatibility wrapper to pnpm dev:web
-./scripts/run-api.sh   # compatibility wrapper to pnpm dev:api
+npm run setup          # generate app envs + install Python deps + db push + seed admin
+npm run dev:web        # Next public process
+npm run dev:api        # FastAPI internal process
+./scripts/run-web.sh   # compatibility wrapper to npm run dev:web
+./scripts/run-api.sh   # compatibility wrapper to npm run dev:api
 ```
 
 ### Workspace commands
 
 ```bash
-pnpm build      # build workspace
-pnpm lint       # lint workspace
-pnpm check-types
-pnpm db:push    # Prisma db push in apps/web
-pnpm seed       # full seed in apps/web
+npm run build      # build workspace
+npm run lint       # lint workspace
+npm run check-types
+npm run db:push    # Prisma db push in apps/web
+npm run seed       # full seed in apps/web
 ```
 
 See [SETUP.md](./SETUP.md) for full documentation.
@@ -59,4 +59,4 @@ See [SETUP.md](./SETUP.md) for full documentation.
 - **Backend:** Next.js public app + FastAPI internal APIs behind proxy rewrite, SQLite (Prisma schema source)
 - **Judge:** Python subprocess with sandboxed execution
 - **Real-time:** Server-Sent Events (SSE)
-- **Workspace:** pnpm workspaces + Turborepo
+- **Workspace:** npm workspaces + Turborepo

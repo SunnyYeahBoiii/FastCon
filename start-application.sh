@@ -18,22 +18,53 @@ warn()  { echo -e "${YELLOW}[!]${NC} $1"; }
 error() { echo -e "${RED}[✗]${NC} $1"; }
 step()  { echo -e "${BLUE}[→]${NC} $1"; }
 
-ensure_pnpm() {
-    if command -v pnpm >/dev/null 2>&1; then
-        info "pnpm: $(pnpm --version)"
+ensure_node_and_npm() {
+    if command -v node >/dev/null 2>&1 && command -v npm >/dev/null 2>&1; then
+        info "node: $(node --version)"
+        info "npm: $(npm --version)"
         return
     fi
 
-    if command -v corepack >/dev/null 2>&1; then
-        step "Enabling pnpm via corepack..."
-        corepack enable
-        corepack prepare pnpm@10.33.0 --activate
-    else
-        step "Installing pnpm globally via npm..."
-        npm install -g pnpm
+    if command -v apt-get >/dev/null 2>&1; then
+        step "Installing nodejs and npm..."
+        if command -v sudo >/dev/null 2>&1; then
+            sudo apt-get update
+            sudo apt-get install -y nodejs npm
+        else
+            apt-get update
+            apt-get install -y nodejs npm
+        fi
+
+        if command -v node >/dev/null 2>&1 && command -v npm >/dev/null 2>&1; then
+            info "node: $(node --version)"
+            info "npm: $(npm --version)"
+            return
+        fi
     fi
 
-    info "pnpm installed: $(pnpm --version)"
+    error "Node.js and npm are required. Install them manually (or provide apt-get) and rerun start."
+    exit 1
+}
+
+ensure_python_venv_support() {
+    if python3 -m venv --help >/dev/null 2>&1; then
+        return
+    fi
+
+    if command -v apt-get >/dev/null 2>&1; then
+        step "Installing python3-venv..."
+        if command -v sudo >/dev/null 2>&1; then
+            sudo apt-get update
+            sudo apt-get install -y python3-venv
+        else
+            apt-get update
+            apt-get install -y python3-venv
+        fi
+        return
+    fi
+
+    error "python3 venv support is missing. Install python3-venv (or the equivalent package for your OS) and rerun start."
+    exit 1
 }
 
 ensure_python_package() {
@@ -54,6 +85,9 @@ echo "========================================"
 echo ""
 
 # --- Step 1: Ensure venv exists ---
+ensure_node_and_npm
+ensure_python_venv_support
+
 if [ ! -d "$VENV_DIR" ]; then
     step "Creating virtual environment..."
     python3 -m venv "$VENV_DIR"
@@ -64,8 +98,6 @@ fi
 step "Activating virtual environment..."
 source "$VENV_DIR/bin/activate"
 info "Virtual environment activated"
-
-ensure_pnpm
 echo ""
 
 # --- Step 3: Verify dependencies ---
@@ -74,7 +106,7 @@ step "Checking dependencies..."
 if [ ! -d "$ROOT_DIR/node_modules" ]; then
     step "Installing Node dependencies..."
     cd "$ROOT_DIR"
-    pnpm install
+    npm install
     info "Node dependencies installed"
 fi
 
@@ -91,13 +123,19 @@ done
 info "All dependencies verified"
 echo ""
 
-# --- Step 4: Build ---
+# --- Step 4: Generate Prisma client ---
+step "Generating Prisma client..."
+npm run prisma:generate
+info "Prisma client generated"
+echo ""
+
+# --- Step 5: Build ---
 step "Building application..."
-pnpm build
+npm run build
 info "Build complete"
 echo ""
 
-# --- Step 5: Start services ---
+# --- Step 6: Start services ---
 echo "========================================"
 echo "  Starting Services"
 echo "========================================"
@@ -132,7 +170,7 @@ echo ""
 
 # Start Next.js
 step "Starting Next.js (port 3000)..."
-pnpm --filter @repo/web start &
+npm --workspace @repo/web run start &
 WEB_PID=$!
 echo ""
 

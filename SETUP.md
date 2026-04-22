@@ -1,13 +1,13 @@
 # FastCons — Setup & Run Guide
 
-Contest evaluation platform. Next.js 16 + FastAPI + Prisma + SQLite + Python judge, organized as a pnpm workspace managed by Turborepo.
+Contest evaluation platform. Next.js 16 + FastAPI + Prisma + SQLite + Python judge, organized as an npm workspace managed by Turborepo.
 
 ## Requirements
 
 | Tool | Version | Auto-installed |
 |------|---------|----------------|
 | Node.js | >= 20 | No |
-| pnpm | 10.x | No |
+| npm | 11.x | Yes, when using apt-get |
 | Python | >= 3.9 | No |
 
 ## First-Time Setup
@@ -15,9 +15,9 @@ Contest evaluation platform. Next.js 16 + FastAPI + Prisma + SQLite + Python jud
 ### Recommended
 
 ```bash
-pnpm install
-pnpm setup
-pnpm dev
+npm install
+npm run setup
+npm run dev
 ```
 
 This installs the workspace, generates `apps/web/.env.local` and `apps/api/.env.local`, installs Python deps, pushes Prisma schema to the shared SQLite DB at the repo root, seeds the admin user, and starts both apps together.
@@ -26,39 +26,39 @@ This installs the workspace, generates `apps/web/.env.local` and `apps/api/.env.
 
 ```bash
 # 1. Install workspace dependencies
-pnpm install
+npm install
 
 # 2. Generate envs, install Python deps, setup DB, seed admin
-pnpm setup
+npm run setup
 
 # 3. Start both apps
-pnpm dev
+npm run dev
 ```
 
 ## Subsequent Runs
 
 ```bash
-pnpm dev
+npm run dev
 ```
 
 Or run either app directly:
 
 ```bash
-pnpm dev:web
-pnpm dev:api
+npm run dev:web
+npm run dev:api
 ```
 
 ## Workspace Commands
 
 ```bash
-pnpm build
-pnpm lint
-pnpm check-types
-pnpm dev
-pnpm dev:web
-pnpm dev:api
-pnpm db:push
-pnpm seed
+npm run build
+npm run lint
+npm run check-types
+npm run dev
+npm run dev:web
+npm run dev:api
+npm run db:push
+npm run seed
 ```
 
 Open `http://localhost:3000`. The internal FastAPI service runs on `http://127.0.0.1:8010`.
@@ -70,7 +70,7 @@ If the automated script fails, follow these steps:
 ### Step 1: Install dependencies
 
 ```bash
-pnpm install
+npm install
 ```
 
 ### Step 2: Environment variables
@@ -98,20 +98,20 @@ Both files contain the same resolved absolute values for:
 ### Step 3: Database
 
 ```bash
-pnpm db:push
-SEED_ADMIN_PASSWORD=admin123 pnpm --filter @repo/web seed -- --admin-only
+npm run db:push
+SEED_ADMIN_PASSWORD=admin123 npm run seed
 ```
 
 ### Step 4: Start FastAPI
 
 ```bash
-pnpm dev:api
+npm run dev:api
 ```
 
 ### Step 5: Start Next.js
 
 ```bash
-pnpm dev:web
+npm run dev:web
 ```
 
 Open `http://localhost:3000`
@@ -144,14 +144,13 @@ fast-con/
 │   └── typescript-config/
 ├── scripts/
 │   ├── setup.sh                 # Workspace bootstrap source of truth
-│   ├── run-api.sh               # Compatibility wrapper to pnpm dev:api
-│   ├── run-web.sh               # Compatibility wrapper to pnpm dev:web
+│   ├── run-api.sh               # Compatibility wrapper to npm run dev:api
+│   ├── run-web.sh               # Compatibility wrapper to npm run dev:web
 │   └── run.sh                   # Compatibility wrapper to web only
 ├── storage/                     # Shared filesystem storage
 ├── dev.db                       # Shared SQLite database
 ├── first-run.sh
 ├── start-application.sh
-├── pnpm-workspace.yaml
 └── turbo.json
 ```
 
@@ -180,13 +179,13 @@ fast-con/
 which python3
 
 # Rerun setup after fixing the interpreter path
-pnpm setup
+npm run setup
 ```
 
 ### Database locked
 ```bash
 # Reset database
-pnpm --filter @repo/web db:reset
+npm --workspace @repo/web run db:reset
 ```
 
 ### Port already in use
