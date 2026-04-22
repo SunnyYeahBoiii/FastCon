@@ -19,11 +19,17 @@ Required at a high level:
 
 The setup and start scripts can install some missing system packages automatically when `apt-get` is available:
 
-- `nodejs`
-- `npm`
+- a compatible Node.js runtime with npm
 - `python3-venv`
 
 If your machine does not provide `apt-get`, install those dependencies manually before continuing.
+
+FastCons requires:
+
+- Node.js `>= 20`
+- npm `>= 10`
+
+This matters because the repository uses npm workspaces with `workspace:*`, which older distro npm builds do not support.
 
 ## Quick Start
 
@@ -48,7 +54,7 @@ chmod +x first-run.sh start-application.sh
 In order, it does the following:
 
 1. Verifies that `python3` exists.
-2. Ensures `node` and `npm` exist. If they are missing and `apt-get` is available, it installs them.
+2. Ensures a compatible `node` and `npm` are available. If they are missing or too old and `apt-get` is available, it installs a modern Node.js runtime.
 3. Ensures Python venv support exists. If `python3 -m venv` is unavailable and `apt-get` is available, it installs `python3-venv`.
 4. Creates `.venv` at the repository root if it does not already exist.
 5. Activates `.venv`.
@@ -98,7 +104,7 @@ Variables currently written by setup:
 
 In order, it does the following:
 
-1. Ensures `node` and `npm` exist, installing them via `apt-get` when available.
+1. Ensures a compatible `node` and `npm` exist, installing a modern Node.js runtime via `apt-get` when available.
 2. Ensures Python venv support exists, installing `python3-venv` via `apt-get` when available.
 3. Creates `.venv` if it does not already exist.
 4. Activates `.venv`.
@@ -235,9 +241,14 @@ If the scripts report that `python3 -m venv` is unavailable:
 - on systems with `apt-get`, rerun the script and let it install `python3-venv`
 - on other systems, install the OS-equivalent package manually, then rerun `./first-run.sh`
 
-### Node or npm is missing
+### Node or npm is missing, or `workspace:*` is unsupported
 
-If your system does not have `apt-get`, install Node.js and npm manually and rerun:
+If your system does not have `apt-get`, install a modern toolchain manually and rerun:
+
+- Node.js `>= 20`
+- npm `>= 10`
+
+Then run:
 
 ```bash
 ./first-run.sh

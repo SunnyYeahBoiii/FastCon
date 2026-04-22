@@ -144,7 +144,7 @@ chmod +x first-run.sh start-application.sh
 ./first-run.sh
 ```
 
-`first-run.sh` forwards into the repository bootstrap flow. It prepares `.venv`, installs Python dependencies, installs Node dependencies, writes both `.env.local` files, generates the Prisma client, pushes the database schema, and seeds the admin user.
+`first-run.sh` forwards into the repository bootstrap flow. It prepares `.venv`, installs Python dependencies, ensures a compatible Node.js/npm runtime, installs Node dependencies, writes both `.env.local` files, generates the Prisma client, pushes the database schema, and seeds the admin user.
 
 ### 2. Start the application
 
@@ -229,6 +229,13 @@ The setup script also writes compatibility aliases that still exist in the runti
 
 - `UPLOAD_DIR`
 - `MAX_CONCURRENT_JUDGES`
+
+The setup and start scripts also validate the JavaScript runtime before running `npm install`. FastCons requires a modern npm workspace-capable toolchain:
+
+- Node.js `>= 20`
+- npm `>= 10`
+
+On Debian/Ubuntu-style systems with `apt-get`, the scripts will attempt to install a compatible Node.js runtime automatically.
 
 ## Script Entry Points
 

@@ -6,6 +6,9 @@ ROOT_DIR="$(cd "$SCRIPT_DIR" && pwd)"
 VENV_DIR="$ROOT_DIR/.venv"
 WEB_DIR="$ROOT_DIR/apps/web"
 API_DIR="$ROOT_DIR/apps/api"
+MIN_NODE_MAJOR=20
+MIN_NPM_MAJOR=10
+TARGET_NODE_MAJOR=22
 
 GREEN='\033[0;32m'
 RED='\033[0;31m'
@@ -18,31 +21,69 @@ warn()  { echo -e "${YELLOW}[!]${NC} $1"; }
 error() { echo -e "${RED}[✗]${NC} $1"; }
 step()  { echo -e "${BLUE}[→]${NC} $1"; }
 
+major_version() {
+    local raw="$1"
+    raw="${raw#v}"
+    echo "${raw%%.*}"
+}
+
+has_supported_node_and_npm() {
+    if ! command -v node >/dev/null 2>&1 || ! command -v npm >/dev/null 2>&1; then
+        return 1
+    fi
+
+    local node_major npm_major
+    node_major="$(major_version "$(node --version)")"
+    npm_major="$(major_version "$(npm --version)")"
+
+    [ "$node_major" -ge "$MIN_NODE_MAJOR" ] && [ "$npm_major" -ge "$MIN_NPM_MAJOR" ]
+}
+
+install_supported_node_and_npm() {
+    if ! command -v apt-get >/dev/null 2>&1; then
+        return 1
+    fi
+
+    step "Installing a compatible Node.js runtime (Node.js $TARGET_NODE_MAJOR + npm)..."
+    if command -v sudo >/dev/null 2>&1; then
+        sudo apt-get update
+        sudo apt-get install -y curl ca-certificates
+        curl -fsSL "https://deb.nodesource.com/setup_${TARGET_NODE_MAJOR}.x" | sudo -E bash -
+        sudo apt-get install -y nodejs
+    else
+        apt-get update
+        apt-get install -y curl ca-certificates
+        curl -fsSL "https://deb.nodesource.com/setup_${TARGET_NODE_MAJOR}.x" | bash -
+        apt-get install -y nodejs
+    fi
+}
+
 ensure_node_and_npm() {
-    if command -v node >/dev/null 2>&1 && command -v npm >/dev/null 2>&1; then
+    if has_supported_node_and_npm; then
         info "node: $(node --version)"
         info "npm: $(npm --version)"
         return
     fi
 
-    if command -v apt-get >/dev/null 2>&1; then
-        step "Installing nodejs and npm..."
-        if command -v sudo >/dev/null 2>&1; then
-            sudo apt-get update
-            sudo apt-get install -y nodejs npm
-        else
-            apt-get update
-            apt-get install -y nodejs npm
+    if command -v node >/dev/null 2>&1 || command -v npm >/dev/null 2>&1; then
+        warn "Detected unsupported Node.js/npm versions."
+        warn "FastCons requires Node.js >= $MIN_NODE_MAJOR and npm >= $MIN_NPM_MAJOR because the workspace uses npm workspaces and Next.js 16."
+        if command -v node >/dev/null 2>&1; then
+            warn "Current node: $(node --version)"
         fi
-
-        if command -v node >/dev/null 2>&1 && command -v npm >/dev/null 2>&1; then
-            info "node: $(node --version)"
-            info "npm: $(npm --version)"
-            return
+        if command -v npm >/dev/null 2>&1; then
+            warn "Current npm: $(npm --version)"
         fi
     fi
 
-    error "Node.js and npm are required. Install them manually (or provide apt-get) and rerun start."
+    if install_supported_node_and_npm && has_supported_node_and_npm; then
+        info "node: $(node --version)"
+        info "npm: $(npm --version)"
+        return
+    fi
+
+    error "A compatible Node.js/npm installation is required."
+    error "Install Node.js >= $MIN_NODE_MAJOR and npm >= $MIN_NPM_MAJOR, then rerun start."
     exit 1
 }
 
