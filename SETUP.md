@@ -29,7 +29,7 @@ FastCons requires:
 - Node.js `>= 20`
 - npm `>= 10`
 
-This matters because the repository uses npm workspaces with `workspace:*`, which older distro npm builds do not support.
+This matters because the repository uses a modern Next.js, Prisma, and npm workspace toolchain.
 
 ## Quick Start
 
@@ -241,7 +241,7 @@ If the scripts report that `python3 -m venv` is unavailable:
 - on systems with `apt-get`, rerun the script and let it install `python3-venv`
 - on other systems, install the OS-equivalent package manually, then rerun `./first-run.sh`
 
-### Node or npm is missing, or `workspace:*` is unsupported
+### Node or npm is missing or too old
 
 If your system does not have `apt-get`, install a modern toolchain manually and rerun:
 

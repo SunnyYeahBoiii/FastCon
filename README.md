@@ -230,7 +230,7 @@ The setup script also writes compatibility aliases that still exist in the runti
 - `UPLOAD_DIR`
 - `MAX_CONCURRENT_JUDGES`
 
-The setup and start scripts also validate the JavaScript runtime before running `npm install`. FastCons requires a modern npm workspace-capable toolchain:
+The setup and start scripts also validate the JavaScript runtime before running `npm install`. FastCons requires a modern Node.js/npm toolchain:
 
 - Node.js `>= 20`
 - npm `>= 10`

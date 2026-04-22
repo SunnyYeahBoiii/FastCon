@@ -67,7 +67,7 @@ ensure_node_and_npm() {
 
     if command -v node >/dev/null 2>&1 || command -v npm >/dev/null 2>&1; then
         warn "Detected unsupported Node.js/npm versions."
-        warn "FastCons requires Node.js >= $MIN_NODE_MAJOR and npm >= $MIN_NPM_MAJOR because the workspace uses npm workspaces and Next.js 16."
+        warn "FastCons requires Node.js >= $MIN_NODE_MAJOR and npm >= $MIN_NPM_MAJOR for the current Next.js, Prisma, and npm workspace toolchain."
         if command -v node >/dev/null 2>&1; then
             warn "Current node: $(node --version)"
         fi
