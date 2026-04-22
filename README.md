@@ -4,28 +4,35 @@ Contest evaluation platform with real-time judging.
 
 ## Quick Start
 
+### First time
+
 ```bash
-# All-in-one: choose setup, build+start, or full
+./first-run.sh
+```
+
+Cài dependencies, setup DB, tạo admin account, build và start server.
+
+### Subsequent runs
+
+```bash
 ./start-application.sh
 ```
 
-Or step by step:
+Build và start server (custom port).
+
+### Individual scripts
 
 ```bash
-# Setup (auto-installs Node.js, Python, pip, npm if missing)
-./scripts/setup.sh
-
-# Build + Start (with custom port)
-./scripts/run.sh
+./scripts/setup.sh   # install deps + setup DB + create admin
+./scripts/run.sh     # build + start with custom port
 ```
 
-npm commands:
+### npm commands
 
 ```bash
-npm run setup   # install deps + setup DB + seed
 npm run build   # build for production
 npm run start   # start production server
-npm run deploy  # setup + build + start
+npm run dev     # development server with hot reload
 ```
 
 See [SETUP.md](./SETUP.md) for full documentation.

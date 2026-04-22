@@ -6,7 +6,6 @@ import { useRouter } from "next/navigation";
 
 interface Contest {
   id: string;
-  code: string;
   title: string;
   description: string | null;
   groundTruthPath: string | null;
@@ -21,7 +20,6 @@ interface Contest {
 
 interface ContestFormData {
   title: string;
-  code: string;
   description: string;
   deadline: string;
   dailySubmissionLimit: string;
@@ -36,7 +34,6 @@ export default function ContestsPage() {
   const [showModal, setShowModal] = useState(false);
   const [formData, setFormData] = useState<ContestFormData>({
     title: "",
-    code: "",
     description: "",
     deadline: "",
     dailySubmissionLimit: "",
@@ -68,8 +65,8 @@ export default function ContestsPage() {
   );
 
   const handleCreateContest = async () => {
-    if (!formData.title || !formData.code) {
-      alert("Vui lòng nhập tiêu đề và mã cuộc thi");
+    if (!formData.title) {
+      alert("Vui lòng nhập tiêu đề");
       return;
     }
 
@@ -95,7 +92,6 @@ export default function ContestsPage() {
         setShowModal(false);
         setFormData({
           title: "",
-          code: "",
           description: "",
           deadline: "",
           dailySubmissionLimit: "",
@@ -183,7 +179,6 @@ export default function ContestsPage() {
           <thead>
             <tr className="bg-surface-container-low text-on-surface-variant font-semibold text-sm border-b border-outline-variant/15">
               <th className="py-4 px-6 font-medium">Cuộc thi</th>
-              <th className="py-4 px-6 font-medium">Mã</th>
               <th className="py-4 px-6 font-medium">Trạng thái</th>
               <th className="py-4 px-6 font-medium text-right">Bài nộp</th>
               <th className="py-4 px-6 font-medium text-right">Thao tác</th>
@@ -192,13 +187,13 @@ export default function ContestsPage() {
           <tbody className="text-sm divide-y divide-outline-variant/10">
             {loading ? (
               <tr>
-                <td colSpan={5} className="py-8 px-6 text-center text-on-surface-variant">
+                <td colSpan={4} className="py-8 px-6 text-center text-on-surface-variant">
                   Đang tải...
                 </td>
               </tr>
             ) : filteredContests.length === 0 ? (
               <tr>
-                <td colSpan={5} className="py-8 px-6 text-center text-on-surface-variant">
+                <td colSpan={4} className="py-8 px-6 text-center text-on-surface-variant">
                   Không tìm thấy cuộc thi
                 </td>
               </tr>
@@ -220,7 +215,6 @@ export default function ContestsPage() {
                       </div>
                     </div>
                   </td>
-                  <td className="py-4 px-6 text-on-surface-variant font-medium">{contest.code}</td>
                   <td className="py-4 px-6">
                     <span
                       className={`px-3 py-1 rounded-full text-xs font-medium ${
@@ -301,19 +295,6 @@ export default function ContestsPage() {
                     type="text"
                     value={formData.title}
                     onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-                    className="w-full px-4 py-2 bg-surface-container-highest rounded-lg border-none focus:ring-0 focus:border-b-2 focus:border-b-primary focus:bg-surface-container-lowest transition-colors text-sm text-on-surface"
-                    required
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-on-surface-variant mb-1">
-                    Mã cuộc thi
-                  </label>
-                  <input
-                    type="text"
-                    value={formData.code}
-                    onChange={(e) => setFormData({ ...formData, code: e.target.value })}
                     className="w-full px-4 py-2 bg-surface-container-highest rounded-lg border-none focus:ring-0 focus:border-b-2 focus:border-b-primary focus:bg-surface-container-lowest transition-colors text-sm text-on-surface"
                     required
                   />

@@ -18,7 +18,13 @@ export default function EditForm({ contest }: { contest: Contest }) {
   const [formData, setFormData] = useState({
     title: contest.title,
     description: contest.description || "",
-    deadline: contest.deadline ? new Date(contest.deadline).toISOString().slice(0, 16) : "",
+    deadline: contest.deadline
+      ? (() => {
+          const d = new Date(contest.deadline);
+          const pad = (n: number) => n.toString().padStart(2, "0");
+          return `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())}T${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}`;
+        })()
+      : "",
     dailySubmissionLimit: contest.dailySubmissionLimit?.toString() || "",
     status: contest.status,
   });

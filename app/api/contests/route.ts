@@ -50,7 +50,14 @@ export async function POST(request: Request) {
       data: {
         title,
         description: description || null,
-        deadline: deadline ? new Date(deadline) : null,
+        deadline: deadline
+          ? (() => {
+              const [date, time] = deadline.split("T");
+              const [y, m, d] = date.split("-").map(Number);
+              const [h, min] = time.split(":").map(Number);
+              return new Date(Date.UTC(y, m - 1, d, h, min));
+            })()
+          : null,
         status: status || "ongoing",
         dailySubmissionLimit: dailySubmissionLimit ? parseInt(dailySubmissionLimit) : null,
       },

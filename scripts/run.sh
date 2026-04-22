@@ -18,16 +18,25 @@ error() { echo -e "${RED}[✗]${NC} $1"; }
 
 # --- Check if already set up ---
 ALREADY_SETUP=false
-if [ -f .env.local ] && [ -d node_modules ] && [ -f prisma/dev.db ]; then
-    ALREADY_SETUP=true
-    warn "Project already set up. Skipping setup."
-fi
+NO_SETUP=false
+for arg in "$@"; do
+    if [ "$arg" = "--no-setup" ]; then
+        NO_SETUP=true
+    fi
+done
 
-if [ "$ALREADY_SETUP" = false ]; then
-    echo "--- Running setup ---"
-    bash scripts/setup.sh
-    info "Setup complete"
-    echo ""
+if [ "$NO_SETUP" = false ]; then
+    if [ -f .env.local ] && [ -d node_modules ] && [ -f prisma/dev.db ]; then
+        ALREADY_SETUP=true
+        warn "Project already set up. Skipping setup."
+    fi
+
+    if [ "$ALREADY_SETUP" = false ]; then
+        echo "--- Running setup ---"
+        bash scripts/setup.sh
+        info "Setup complete"
+        echo ""
+    fi
 fi
 
 # --- Port ---

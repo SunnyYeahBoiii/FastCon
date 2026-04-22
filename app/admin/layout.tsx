@@ -5,7 +5,6 @@ import {
   Users,
   FileCheck,
   LogOut,
-  Bell,
   Terminal,
   User,
   PanelLeftClose,
@@ -13,7 +12,7 @@ import {
   Home,
 } from "lucide-react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useState } from "react";
 import { ThemeToggle } from "@/components/ThemeToggle";
 
@@ -44,8 +43,14 @@ export default function AdminLayout({
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
+  const router = useRouter();
   const [collapsed, setCollapsed] = useState(false);
   const sidebarWidth = collapsed ? SIDEBAR_COLLAPSED : SIDEBAR_EXPANDED;
+
+  const handleLogout = async () => {
+    await fetch("/api/logout", { method: "POST" });
+    router.push("/login");
+  };
 
   return (
     <div className="min-h-full flex">
@@ -119,6 +124,7 @@ export default function AdminLayout({
 
           {/* Logout */}
           <button
+            onClick={handleLogout}
             className="flex items-center gap-2 px-3 py-2 rounded text-on-surface-variant hover:bg-surface-container-high/20 transition-colors w-full whitespace-nowrap"
             aria-label="Logout"
           >
@@ -161,12 +167,6 @@ export default function AdminLayout({
             </div>
             <div className="flex items-center gap-1">
               <ThemeToggle />
-              <button
-                className="p-2 rounded hover:bg-surface-container-high/20 transition-colors"
-                aria-label="Notifications"
-              >
-                <Bell className="w-5 h-5 text-on-surface-variant" />
-              </button>
             </div>
           </div>
         </header>

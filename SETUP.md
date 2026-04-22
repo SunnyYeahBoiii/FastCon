@@ -12,50 +12,40 @@ Contest evaluation platform. Next.js 16 + Prisma + SQLite + Python judge.
 | numpy | latest | Yes (via pip3) |
 | pandas | latest | Yes (via pip3) |
 
-## Automated Setup
+## First-Time Setup
 
-### Option 1: Interactive menu (recommended)
+### Option 1: All-in-one (recommended)
+
+```bash
+./first-run.sh
+```
+
+Auto-installs missing prerequisites, creates admin account, builds, and starts server.
+
+### Option 2: Step by step
+
+```bash
+# 1. Setup (auto-installs missing prerequisites, creates admin + DB)
+./scripts/setup.sh
+
+# 2. Build + Start (prompts for port, default 3000)
+./scripts/run.sh
+```
+
+## Subsequent Runs
 
 ```bash
 ./start-application.sh
 ```
 
-Choose from:
-1. **Setup** — install deps + database
-2. **Build + Start** — compile and launch (custom port)
-3. **Full** — setup + build + start
+Builds and starts the server. Prompts for custom port.
 
-### Option 2: Individual scripts
+## npm Commands
 
 ```bash
-# Setup (auto-installs missing prerequisites)
-./scripts/setup.sh
-
-# Build + Start (prompts for port, default 3000)
-./scripts/run.sh
-```
-
-### Option 3: npm commands
-
-```bash
-# All-in-one: setup + build + start
-npm run deploy
-```
-
-Or step by step:
-
-```bash
-# 1. Install dependencies
-npm install
-
-# 2. Setup environment + database + seed data
-npm run setup
-
-# 3. Build for production
-npm run build
-
-# 4. Start production server
-npm run start
+npm run build   # build for production
+npm run start   # start production server
+npm run dev     # development server with hot reload
 ```
 
 Open http://localhost:3000 (or your custom port)
@@ -86,8 +76,8 @@ Edit `.env.local` if needed. Defaults work for local development.
 # Push schema to SQLite
 npx prisma db push
 
-# Run seed (creates admin + sample contests)
-npx tsx prisma/seed.ts
+# Create admin account
+npx tsx prisma/seed.ts --admin-only
 ```
 
 ### Step 4: Build
@@ -96,10 +86,10 @@ npx tsx prisma/seed.ts
 npm run build
 ```
 
-### Step 5: Start development server
+### Step 5: Start server
 
 ```bash
-npm run dev
+npm run start
 ```
 
 Open http://localhost:3000 (or your custom port)
@@ -118,6 +108,7 @@ fast-con/
 │   ├── (root)/            # Public pages (user)
 │   │   ├── submit/        # Submit page
 │   │   ├── leaderboard/   # Leaderboard
+│   │   ├── profile/       # User profile page
 │   │   └── login/         # Login
 │   ├── admin/             # Admin panel
 │   │   ├── contests/      # Contest management
@@ -132,11 +123,12 @@ fast-con/
 │   ├── setup.sh           # Auto-setup script
 │   ├── run.sh             # Build + start with custom port
 │   └── judge_runner.py    # Python evaluation runner
-├── start-application.sh   # Interactive entry point
+├── first-run.sh           # First-time: setup + build + start
+├── start-application.sh   # Build + start (subsequent runs)
 ├── lib/
 │   ├── db.ts             # Prisma client
 │   ├── queue.ts          # Judge queue (in-memory + SQLite)
-│   ├── judge.ts          # Python process spawner
+│   ├── judge.ts          # Python process spawner with concurrency limit
 │   ├── events.ts         # Event emitter for SSE
 │   ├── session.ts        # Cookie-based session
 │   ├── auth.ts           # Password hashing
@@ -144,7 +136,7 @@ fast-con/
 │   └── evaluateTemplates.ts  # Default evaluate template
 ├── prisma/
 │   ├── schema.prisma     # Database schema
-│   └── seed.ts           # Seed script
+│   └── seed.ts           # Seed script (admin only)
 └── proxy.ts              # CORS proxy middleware
 ```
 
@@ -187,7 +179,7 @@ PYTHON_BIN="/path/to/python3"
 ```bash
 # Reset database
 npx prisma db push --accept-data-loss
-npx tsx prisma/seed.ts
+npx tsx prisma/seed.ts --admin-only
 ```
 
 ### Port already in use

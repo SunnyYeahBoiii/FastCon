@@ -69,7 +69,14 @@ export async function PUT(
       data: {
         title: title ?? contest.title,
         description: description ?? contest.description,
-        deadline: deadline ? new Date(deadline) : contest.deadline,
+        deadline: deadline
+          ? (() => {
+              const [date, time] = deadline.split("T");
+              const [y, m, d] = date.split("-").map(Number);
+              const [h, min] = time.split(":").map(Number);
+              return new Date(Date.UTC(y, m - 1, d, h, min));
+            })()
+          : contest.deadline,
         status: status ?? contest.status,
         dailySubmissionLimit: dailySubmissionLimit ? parseInt(dailySubmissionLimit) : contest.dailySubmissionLimit,
       },

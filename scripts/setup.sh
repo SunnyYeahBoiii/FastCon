@@ -168,29 +168,16 @@ info "Admin password set"
 
 echo ""
 
-# --- Database choice ---
+# --- Database ---
 echo "--- Database ---"
-echo "1) Seed with sample data (admin + 2 sample contests)"
-echo "2) Empty database (admin only)"
-echo ""
-read -rp "Choose [1/2]: " DB_CHOICE
 
 npx prisma db push --accept-data-loss
 info "Database schema pushed"
 
-if [ "$DB_CHOICE" = "2" ]; then
-    # Empty database: only admin
-    echo ""
-    echo "--- Creating admin user only ---"
-    SEED_ADMIN_PASSWORD="$ADMIN_PASSWORD" npx tsx prisma/seed.ts --admin-only
-    info "Admin user created"
-else
-    # Full seed
-    echo ""
-    echo "--- Seeding database ---"
-    SEED_ADMIN_PASSWORD="$ADMIN_PASSWORD" npx tsx prisma/seed.ts
-    info "Database seeded"
-fi
+echo ""
+echo "--- Creating admin user ---"
+SEED_ADMIN_PASSWORD="$ADMIN_PASSWORD" npx tsx prisma/seed.ts --admin-only
+info "Admin user created"
 
 echo ""
 echo "========================================"

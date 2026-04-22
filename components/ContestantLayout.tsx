@@ -65,7 +65,13 @@ export default function ContestantLayout({
                 <span className="hidden md:block text-sm text-on-surface-variant">
                   Xin chào, <span className="font-medium text-on-surface">{user.name}</span>
                 </span>
-                <User className="w-5 h-5 text-on-surface-variant" />
+                <Link
+                  href="/profile"
+                  className="p-2 rounded hover:bg-surface-container-high/20 transition-colors"
+                  aria-label="Profile"
+                >
+                  <User className="w-5 h-5 text-on-surface-variant" />
+                </Link>
                 <button
                   onClick={handleLogout}
                   className="p-2 rounded hover:bg-surface-container-high/20 transition-colors"
