@@ -56,7 +56,7 @@ See [SETUP.md](./SETUP.md) for full documentation.
 ## Tech Stack
 
 - **Frontend:** Next.js 16, React 19, Tailwind CSS
-- **Backend:** Next.js public routes + FastAPI internal APIs, SQLite (Prisma schema source)
+- **Backend:** Next.js public app + FastAPI internal APIs behind proxy rewrite, SQLite (Prisma schema source)
 - **Judge:** Python subprocess with sandboxed execution
 - **Real-time:** Server-Sent Events (SSE)
 - **Workspace:** pnpm workspaces + Turborepo

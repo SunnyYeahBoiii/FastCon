@@ -21,9 +21,3 @@ async def get_admin_user(current_user: dict = Depends(get_current_user)) -> dict
     if current_user["role"] != "admin":
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
     return current_user
-
-
-def require_matching_user(current_user: dict, requested_user_id: str | None) -> str:
-    if requested_user_id and requested_user_id != current_user["id"]:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
-    return current_user["id"]

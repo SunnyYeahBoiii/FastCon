@@ -18,7 +18,7 @@ interface Submission {
   contest: { id: string; title: string };
 }
 
-export default function SubmitPage({ userId }: { userId: string }) {
+export default function SubmitPage() {
   const [selectedContest, setSelectedContest] = useState("");
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -36,11 +36,11 @@ export default function SubmitPage({ userId }: { userId: string }) {
 
   // Fetch initial submissions
   const fetchMySubmissions = useCallback(() => {
-    fetch(`/api/submissions/user?userId=${userId}`)
+    fetch("/api/submissions/user")
       .then((res) => res.json())
       .then((data) => setMySubmissions(data.submissions || []))
       .catch(console.error);
-  }, [userId]);
+  }, []);
 
   useEffect(() => {
     fetchMySubmissions();
@@ -48,9 +48,7 @@ export default function SubmitPage({ userId }: { userId: string }) {
 
   // SSE connection for real-time status updates
   useEffect(() => {
-    const eventSource = new EventSource(
-      `/api/submissions/stream?userId=${userId}`
-    );
+    const eventSource = new EventSource("/api/submissions/stream");
 
     eventSource.addEventListener("initial", (event) => {
       const data = JSON.parse(event.data);
@@ -78,7 +76,7 @@ export default function SubmitPage({ userId }: { userId: string }) {
     };
 
     return () => eventSource.close();
-  }, [userId]);
+  }, []);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -111,7 +109,6 @@ export default function SubmitPage({ userId }: { userId: string }) {
       const formData = new FormData();
       formData.append("file", selectedFile);
       formData.append("contestId", selectedContest);
-      formData.append("userId", userId);
 
       const response = await fetch("/api/submissions", {
         method: "POST",

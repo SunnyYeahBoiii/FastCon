@@ -133,7 +133,7 @@ fast-con/
 │   │   ├── lib/
 │   │   ├── prisma/
 │   │   ├── package.json
-│   │   └── proxy.ts              # Conditional rewrite to FastAPI
+│   │   └── proxy.ts              # Rewrite submissions/leaderboard APIs to FastAPI
 │   └── api/
 │       ├── backend/              # FastAPI internal service
 │       ├── scripts/              # Judge runner + local Python helpers

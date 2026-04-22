@@ -11,7 +11,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse, StreamingResponse
 
 from . import repositories, schemas
-from .auth import get_admin_user, get_current_user, require_matching_user
+from .auth import get_admin_user, get_current_user
 from .config import get_max_upload_bytes, get_submissions_root
 from .streams import SubmissionBroadcaster, default_event, named_event
 from .worker import SubmissionWorker
@@ -57,10 +57,9 @@ async def create_submission(
     request: Request,
     file: UploadFile = File(...),
     contest_id: str = Form(..., alias="contestId"),
-    user_id: str | None = Form(None, alias="userId"),
     current_user: dict = Depends(get_current_user),
 ):
-    actual_user_id = require_matching_user(current_user, user_id)
+    user_id = current_user["id"]
 
     filename = Path(file.filename or "").name
     if not filename or not filename.endswith(".pkl"):
@@ -101,7 +100,7 @@ async def create_submission(
     await asyncio.to_thread(filepath.write_bytes, contents)
 
     submission_id = await repositories.create_submission(
-        user_id=actual_user_id,
+        user_id=user_id,
         contest_id=contest_id,
         filename=saved_filename,
         filepath=str(filepath),
@@ -112,54 +111,19 @@ async def create_submission(
 
 
 @app.get("/api/submissions/user")
-async def list_current_user_submissions(
-    user_id: str | None = Query(None, alias="userId"),
-    current_user: dict = Depends(get_current_user),
-):
-    actual_user_id = require_matching_user(current_user, user_id)
-    submissions = await repositories.fetch_user_submissions(actual_user_id)
+async def list_current_user_submissions(current_user: dict = Depends(get_current_user)):
+    submissions = await repositories.fetch_user_submissions(current_user["id"])
     return {"submissions": [schemas.user_submission_payload(row) for row in submissions]}
-
-
-@app.get("/api/submissions/{submission_id}")
-async def submission_detail(submission_id: str, _admin_user: dict = Depends(get_admin_user)):
-    submission = await repositories.fetch_submission_detail(submission_id)
-    if submission is None:
-        return JSONResponse(
-            {"ok": False, "error": "Submission not found"},
-            status_code=status.HTTP_404_NOT_FOUND,
-        )
-
-    return {"ok": True, "submission": schemas.submission_detail_payload(submission)}
-
-
-@app.post("/api/submissions/{submission_id}/rerun")
-async def rerun_submission(
-    request: Request,
-    submission_id: str,
-    _admin_user: dict = Depends(get_admin_user),
-):
-    submission = await repositories.fetch_submission_status(submission_id)
-    if submission is None:
-        return JSONResponse(
-            {"ok": False, "error": "Submission not found"},
-            status_code=status.HTTP_404_NOT_FOUND,
-        )
-
-    await repositories.requeue_submission(submission_id)
-    request.app.state.worker.notify()
-    return {"ok": True}
 
 
 @app.get("/api/submissions/stream")
 async def submission_stream(
     request: Request,
-    user_id: str | None = Query(None, alias="userId"),
     current_user: dict = Depends(get_current_user),
 ):
-    actual_user_id = require_matching_user(current_user, user_id)
-    initial_rows = await repositories.fetch_user_submissions(actual_user_id, limit=20)
-    queue, unsubscribe = await request.app.state.broadcaster.subscribe(actual_user_id)
+    user_id = current_user["id"]
+    initial_rows = await repositories.fetch_user_submissions(user_id, limit=20)
+    queue, unsubscribe = await request.app.state.broadcaster.subscribe(user_id)
 
     async def event_generator():
         started_at = asyncio.get_running_loop().time()
@@ -192,7 +156,7 @@ async def submission_stream(
 
                 now = asyncio.get_running_loop().time()
                 if now >= poll_deadline:
-                    updated_rows = await repositories.fetch_user_submissions(actual_user_id, limit=20)
+                    updated_rows = await repositories.fetch_user_submissions(user_id, limit=20)
                     yield named_event(
                         "poll_update",
                         {"submissions": [schemas.user_submission_payload(row) for row in updated_rows]},
@@ -214,6 +178,36 @@ async def submission_stream(
             "X-Accel-Buffering": "no",
         },
     )
+
+
+@app.get("/api/submissions/{submission_id}")
+async def submission_detail(submission_id: str, _admin_user: dict = Depends(get_admin_user)):
+    submission = await repositories.fetch_submission_detail(submission_id)
+    if submission is None:
+        return JSONResponse(
+            {"ok": False, "error": "Submission not found"},
+            status_code=status.HTTP_404_NOT_FOUND,
+        )
+
+    return {"ok": True, "submission": schemas.submission_detail_payload(submission)}
+
+
+@app.post("/api/submissions/{submission_id}/rerun")
+async def rerun_submission(
+    request: Request,
+    submission_id: str,
+    _admin_user: dict = Depends(get_admin_user),
+):
+    submission = await repositories.fetch_submission_status(submission_id)
+    if submission is None:
+        return JSONResponse(
+            {"ok": False, "error": "Submission not found"},
+            status_code=status.HTTP_404_NOT_FOUND,
+        )
+
+    await repositories.requeue_submission(submission_id)
+    request.app.state.worker.notify()
+    return {"ok": True}
 
 
 @app.get("/api/leaderboard")
