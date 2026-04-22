@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { requireAdminApi } from "@/lib/guard";
+import { parseDailySubmissionLimit } from "../validation";
 
 export async function GET(
   request: Request,
@@ -52,6 +53,7 @@ export async function PUT(
     const { id } = await params;
     const body = await request.json();
     const { title, description, deadline, status, dailySubmissionLimit } = body;
+    const parsedLimit = parseDailySubmissionLimit(dailySubmissionLimit);
 
     const contest = await prisma.contest.findUnique({
       where: { id },
@@ -61,6 +63,12 @@ export async function PUT(
       return NextResponse.json(
         { ok: false, error: "Contest not found" },
         { status: 404 }
+      );
+    }
+    if (!parsedLimit.ok) {
+      return NextResponse.json(
+        { ok: false, error: parsedLimit.error },
+        { status: 400 }
       );
     }
 
@@ -78,7 +86,10 @@ export async function PUT(
             })()
           : contest.deadline,
         status: status ?? contest.status,
-        dailySubmissionLimit: dailySubmissionLimit ? parseInt(dailySubmissionLimit) : contest.dailySubmissionLimit,
+        dailySubmissionLimit:
+          parsedLimit.value === undefined
+            ? contest.dailySubmissionLimit
+            : parsedLimit.value,
       },
     });
 
@@ -118,6 +129,9 @@ export async function DELETE(
 
     // SQLite doesn't support cascade delete, so delete submissions manually
     await prisma.submission.deleteMany({
+      where: { contestId: id },
+    });
+    await prisma.submissionQuotaWindow.deleteMany({
       where: { contestId: id },
     });
 

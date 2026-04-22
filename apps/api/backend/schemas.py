@@ -73,6 +73,19 @@ def submission_update_payload(row: dict[str, Any] | None, submission_id: str, fa
     }
 
 
+def quota_snapshot_payload(snapshot: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "contestId": snapshot["contestId"],
+        "dailySubmissionLimit": snapshot["dailySubmissionLimit"],
+        "used": snapshot["used"],
+        "remaining": snapshot["remaining"],
+        "windowStartedAt": _serialize_datetime(snapshot["windowStartedAt"]),
+        "resetAt": _serialize_datetime(snapshot["resetAt"]),
+        "isLimited": snapshot["isLimited"],
+        "isQuotaExceeded": snapshot["isQuotaExceeded"],
+    }
+
+
 def get_points_from_rank(rank: int) -> int:
     if rank == 1:
         return 10

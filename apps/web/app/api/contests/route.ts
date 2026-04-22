@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { requireAdminApi } from "@/lib/guard";
+import { parseDailySubmissionLimit } from "./validation";
 
 export async function GET() {
   const guard = await requireAdminApi();
@@ -38,10 +39,17 @@ export async function POST(request: Request) {
   try {
     const body = await request.json();
     const { title, description, deadline, status, dailySubmissionLimit } = body;
+    const parsedLimit = parseDailySubmissionLimit(dailySubmissionLimit);
 
     if (!title) {
       return NextResponse.json(
         { ok: false, error: "Title is required" },
+        { status: 400 }
+      );
+    }
+    if (!parsedLimit.ok) {
+      return NextResponse.json(
+        { ok: false, error: parsedLimit.error },
         { status: 400 }
       );
     }
@@ -59,7 +67,7 @@ export async function POST(request: Request) {
             })()
           : null,
         status: status || "ongoing",
-        dailySubmissionLimit: dailySubmissionLimit ? parseInt(dailySubmissionLimit) : null,
+        dailySubmissionLimit: parsedLimit.value ?? null,
       },
     });
 

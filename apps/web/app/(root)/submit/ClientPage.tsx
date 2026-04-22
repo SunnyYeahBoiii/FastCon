@@ -1,11 +1,15 @@
 "use client";
 
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Upload, Send, ChevronDown, CheckCircle, Clock, AlertCircle } from "lucide-react";
 
 interface Contest {
   id: string;
   title: string;
+  description: string | null;
+  deadline: string | null;
+  status: string;
+  dailySubmissionLimit: number | null;
 }
 
 interface Submission {
@@ -18,35 +22,117 @@ interface Submission {
   contest: { id: string; title: string };
 }
 
+interface SubmissionQuota {
+  contestId: string;
+  dailySubmissionLimit: number | null;
+  used: number;
+  remaining: number | null;
+  windowStartedAt: string | null;
+  resetAt: string | null;
+  isLimited: boolean;
+  isQuotaExceeded: boolean;
+}
+
 export default function SubmitPage() {
   const [selectedContest, setSelectedContest] = useState("");
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [contests, setContests] = useState<Contest[]>([]);
   const [mySubmissions, setMySubmissions] = useState<Submission[]>([]);
+  const [selectedContestQuota, setSelectedContestQuota] = useState<SubmissionQuota | null>(null);
+  const [quotaLoading, setQuotaLoading] = useState(false);
+  const [quotaError, setQuotaError] = useState<string | null>(null);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+  const [submitNotice, setSubmitNotice] = useState<string | null>(null);
+  const [nowMs, setNowMs] = useState(() => Date.now());
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Fetch contests
+  useEffect(() => {
+    const intervalId = window.setInterval(() => {
+      setNowMs(Date.now());
+    }, 1000);
+
+    return () => window.clearInterval(intervalId);
+  }, []);
+
   useEffect(() => {
     fetch("/api/public/contests")
-      .then((res) => res.json())
-      .then((data) => setContests(data.contests || []))
+      .then(async (res) => {
+        const data = await readJsonResponse<{ contests?: Contest[] }>(res);
+        setContests(data?.contests || []);
+      })
       .catch(console.error);
   }, []);
 
-  // Fetch initial submissions
   const fetchMySubmissions = useCallback(() => {
     fetch("/api/submissions/user")
-      .then((res) => res.json())
-      .then((data) => setMySubmissions(data.submissions || []))
+      .then(async (res) => {
+        const data = await readJsonResponse<{ submissions?: Submission[] }>(res);
+        setMySubmissions(data?.submissions || []);
+      })
       .catch(console.error);
+  }, []);
+
+  const fetchQuota = useCallback(async (contestId: string) => {
+    setQuotaLoading(true);
+    setQuotaError(null);
+    try {
+      const response = await fetch(
+        `/api/submissions/quota?contestId=${encodeURIComponent(contestId)}`
+      );
+      const data = await readJsonResponse<{ error?: string; quota?: SubmissionQuota }>(response);
+
+      if (!response.ok) {
+        throw new Error(data?.error || "Không thể tải quota nộp bài");
+      }
+
+      setSelectedContestQuota(data?.quota ?? null);
+    } catch (error) {
+      console.error("Fetch submission quota error:", error);
+      setSelectedContestQuota(null);
+      setQuotaError("Không thể tải số lượt nộp còn lại. Hệ thống vẫn sẽ kiểm tra quota khi bạn submit.");
+    } finally {
+      setQuotaLoading(false);
+    }
   }, []);
 
   useEffect(() => {
     fetchMySubmissions();
   }, [fetchMySubmissions]);
 
-  // SSE connection for real-time status updates
+  useEffect(() => {
+    if (!selectedContest) {
+      setSelectedContestQuota(null);
+      setQuotaError(null);
+      return;
+    }
+
+    void fetchQuota(selectedContest);
+  }, [selectedContest, fetchQuota]);
+
+  useEffect(() => {
+    if (!selectedContest || !selectedContestQuota?.resetAt) {
+      return;
+    }
+
+    const resetAtMs = new Date(selectedContestQuota.resetAt).getTime();
+    if (Number.isNaN(resetAtMs)) {
+      return;
+    }
+
+    const delay = resetAtMs - Date.now();
+    if (delay <= 0) {
+      void fetchQuota(selectedContest);
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      void fetchQuota(selectedContest);
+    }, delay + 50);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [selectedContest, selectedContestQuota?.resetAt, fetchQuota]);
+
   useEffect(() => {
     const eventSource = new EventSource("/api/submissions/stream");
 
@@ -78,28 +164,54 @@ export default function SubmitPage() {
     return () => eventSource.close();
   }, []);
 
+  const selectedContestRecord =
+    contests.find((contest) => contest.id === selectedContest) ?? null;
+  const remainingQuotaLabel = quotaLoading
+    ? "Đang tải..."
+    : selectedContestQuota?.isLimited === false
+      ? "Không giới hạn"
+      : selectedContestQuota
+        ? `${selectedContestQuota.remaining ?? 0} lượt`
+        : "--";
+  const isSubmitDisabled =
+    isSubmitting ||
+    quotaLoading ||
+    !selectedContest ||
+    !selectedFile ||
+    Boolean(selectedContestQuota?.isQuotaExceeded);
+
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) {
-      // Validate file type
-      if (!file.name.endsWith(".pkl")) {
-        alert("Only .pkl files are accepted");
-        return;
-      }
-      setSelectedFile(file);
+    setSubmitError(null);
+    setSubmitNotice(null);
+
+    if (!file) {
+      setSelectedFile(null);
+      return;
     }
+
+    if (!file.name.endsWith(".pkl")) {
+      setSelectedFile(null);
+      e.target.value = "";
+      setSubmitError("Chỉ chấp nhận file .pkl");
+      return;
+    }
+
+    setSelectedFile(file);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setSubmitError(null);
+    setSubmitNotice(null);
 
     if (!selectedContest) {
-      alert("Please select a contest");
+      setSubmitError("Vui lòng chọn cuộc thi");
       return;
     }
 
     if (!selectedFile) {
-      alert("Please upload a file");
+      setSubmitError("Vui lòng chọn file nộp bài");
       return;
     }
 
@@ -114,22 +226,30 @@ export default function SubmitPage() {
         method: "POST",
         body: formData,
       });
+      const data = await readJsonResponse<{
+        error?: string;
+        quota?: SubmissionQuota;
+      }>(response);
 
       if (response.ok) {
-        alert("Submission successful!");
+        setSubmitNotice("Bài nộp đã được nhận và đưa vào hàng chờ chấm.");
         setSelectedFile(null);
-        setSelectedContest("");
+        if (data?.quota) {
+          setSelectedContestQuota(data.quota);
+        }
         if (fileInputRef.current) {
           fileInputRef.current.value = "";
         }
         fetchMySubmissions();
       } else {
-        const data = await response.json();
-        alert(`Submission failed: ${data.error || "Unknown error"}`);
+        if (data?.quota) {
+          setSelectedContestQuota(data.quota);
+        }
+        setSubmitError(data?.error || "Không thể nộp bài");
       }
     } catch (error) {
       console.error("Submission error:", error);
-      alert("Submission failed. Please try again.");
+      setSubmitError("Nộp bài thất bại. Vui lòng thử lại.");
     } finally {
       setIsSubmitting(false);
     }
@@ -137,7 +257,6 @@ export default function SubmitPage() {
 
   return (
     <main className="flex-grow pt-24 pb-20 md:pb-12 px-4 sm:px-6 lg:px-8 max-w-screen-md mx-auto w-full font-body">
-      {/* Header */}
       <div className="mb-10">
         <h1 className="text-3xl font-bold tracking-tight text-on-surface mb-2">
           Submit Solution
@@ -148,12 +267,22 @@ export default function SubmitPage() {
         </p>
       </div>
 
-      {/* Submission form */}
       <form
         onSubmit={handleSubmit}
         className="space-y-8 bg-surface-container-low p-6 sm:p-8 rounded-lg shadow-[0_8px_30px_rgb(0,0,0,0.04)]"
       >
-        {/* Contest selection */}
+        {submitNotice ? (
+          <div className="rounded-lg border border-secondary-container bg-secondary-container/20 px-4 py-3 text-sm text-on-surface">
+            {submitNotice}
+          </div>
+        ) : null}
+
+        {submitError ? (
+          <div className="rounded-lg border border-error-container/40 bg-error-container/20 px-4 py-3 text-sm text-error">
+            {submitError}
+          </div>
+        ) : null}
+
         <div className="space-y-3">
           <label
             className="block text-sm font-semibold text-on-surface"
@@ -165,7 +294,11 @@ export default function SubmitPage() {
             <select
               id="contest-select"
               value={selectedContest}
-              onChange={(e) => setSelectedContest(e.target.value)}
+              onChange={(e) => {
+                setSelectedContest(e.target.value);
+                setSubmitError(null);
+                setSubmitNotice(null);
+              }}
               className="appearance-none w-full bg-surface-container-highest border-0 border-b-2 border-transparent text-on-surface text-sm rounded px-4 py-3 focus:ring-0 focus:border-primary focus:bg-surface-container-lowest transition-all cursor-pointer"
             >
               <option value="" disabled>
@@ -183,13 +316,107 @@ export default function SubmitPage() {
           </div>
         </div>
 
-        {/* File upload area */}
+        {selectedContestRecord ? (
+          <div className="rounded-lg border border-outline-variant/20 bg-surface-container-lowest p-5 space-y-4">
+            <div className="flex flex-col gap-1">
+              <h2 className="text-base font-semibold text-on-surface">
+                Chính sách nộp bài
+              </h2>
+              <p className="text-sm text-on-surface-variant">
+                Hệ thống dùng cửa sổ 24 giờ tính từ lần nộp hợp lệ đầu tiên trong cửa sổ hiện tại.
+              </p>
+            </div>
+
+            <div className="grid gap-3 sm:grid-cols-2">
+              <InfoChip
+                label="Trạng thái"
+                value={selectedContestRecord.status === "ongoing" ? "Đang hoạt động" : "Đã hoàn thành"}
+              />
+              <InfoChip
+                label="Hạn chót"
+                value={selectedContestRecord.deadline ? formatAbsoluteTime(selectedContestRecord.deadline) : "Không có"}
+              />
+              <InfoChip
+                label="Giới hạn 24 giờ"
+                value={
+                  selectedContestRecord.dailySubmissionLimit === null
+                    ? "Không giới hạn"
+                    : `${selectedContestRecord.dailySubmissionLimit} lượt`
+                }
+              />
+              <InfoChip
+                label="Lượt còn lại"
+                value={remainingQuotaLabel}
+              />
+            </div>
+
+            {quotaError ? (
+              <div className="rounded-lg border border-error-container/30 bg-error-container/15 px-4 py-3 text-sm text-error">
+                {quotaError}
+              </div>
+            ) : null}
+
+            {!quotaLoading && selectedContestQuota ? (
+              <div className="space-y-2 text-sm text-on-surface">
+                {selectedContestQuota.isLimited ? (
+                  <>
+                    <p>
+                      Đã dùng <span className="font-semibold">{selectedContestQuota.used}</span> /{" "}
+                      <span className="font-semibold">
+                        {selectedContestQuota.dailySubmissionLimit}
+                      </span>{" "}
+                      lượt trong cửa sổ hiện tại.
+                    </p>
+
+                    {selectedContestQuota.windowStartedAt ? (
+                      <p className="text-on-surface-variant">
+                        Cửa sổ hiện tại bắt đầu lúc{" "}
+                        <span className="font-medium text-on-surface">
+                          {formatAbsoluteTime(selectedContestQuota.windowStartedAt)}
+                        </span>
+                        .
+                      </p>
+                    ) : (
+                      <p className="text-on-surface-variant">
+                        Cửa sổ hiện tại chưa bắt đầu. Lần nộp hợp lệ tiếp theo sẽ mở một cửa sổ 24 giờ mới.
+                      </p>
+                    )}
+
+                    {selectedContestQuota.resetAt ? (
+                      <div className="rounded-lg bg-surface-container-high px-4 py-3">
+                        <div className="text-xs uppercase tracking-wide text-on-surface-variant mb-1">
+                          Reset quota
+                        </div>
+                        <div className="text-lg font-semibold text-on-surface">
+                          {formatCountdown(selectedContestQuota.resetAt, nowMs)}
+                        </div>
+                        <div className="text-xs text-on-surface-variant mt-1">
+                          Lúc {formatAbsoluteTime(selectedContestQuota.resetAt)}
+                        </div>
+                      </div>
+                    ) : null}
+
+                    {selectedContestQuota.isQuotaExceeded ? (
+                      <div className="rounded-lg border border-error-container/30 bg-error-container/15 px-4 py-3 text-sm text-error">
+                        Bạn đã dùng hết lượt nộp trong cửa sổ hiện tại. Hệ thống sẽ mở lại đủ lượt khi quota reset.
+                      </div>
+                    ) : null}
+                  </>
+                ) : (
+                  <p className="text-on-surface-variant">
+                    Contest này hiện không giới hạn số lượt nộp.
+                  </p>
+                )}
+              </div>
+            ) : null}
+          </div>
+        ) : null}
+
         <div className="space-y-3">
           <label className="block text-sm font-semibold text-on-surface">
             Source Code
           </label>
           <div className="relative group cursor-pointer">
-            {/* Hidden file input */}
             <input
               ref={fileInputRef}
               type="file"
@@ -198,7 +425,6 @@ export default function SubmitPage() {
               className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
               aria-label="Upload Source Code"
             />
-            {/* Styled upload area */}
             <div
               className={`flex flex-col items-center justify-center p-12 bg-surface-container-lowest rounded-lg border-2 border-dashed transition-colors text-center relative overflow-hidden ${
                 selectedFile
@@ -233,22 +459,20 @@ export default function SubmitPage() {
           </div>
         </div>
 
-        {/* Submit button */}
         <div className="pt-6">
           <button
             type="submit"
-            disabled={isSubmitting}
-            className={`w-full sm:w-auto px-8 py-3 bg-gradient-to-br from-primary to-primary-container text-on-primary font-semibold text-sm rounded shadow-[0_4px_14px_0_rgba(0,61,155,0.2)] hover:shadow-[0_6px_20px_rgba(0,61,155,0.23)] transition-all tracking-wide flex items-center justify-center gap-2 ${
-              isSubmitting ? "opacity-70 cursor-not-allowed" : "hover:opacity-90"
+            disabled={isSubmitDisabled}
+            className={`w-full sm:w-auto px-8 py-3 bg-gradient-to-br from-primary to-primary-container text-on-primary font-semibold text-sm rounded shadow-[0_4px_14px_0_rgba(0,61,155,0.2)] transition-all tracking-wide flex items-center justify-center gap-2 ${
+              isSubmitDisabled ? "opacity-70 cursor-not-allowed" : "hover:opacity-90 hover:shadow-[0_6px_20px_rgba(0,61,155,0.23)]"
             }`}
           >
             <Send className="w-4 h-4" />
-            {isSubmitting ? "Submitting..." : "Submit Evaluation"}
+            {isSubmitting ? "Submitting..." : quotaLoading ? "Checking quota..." : "Submit Evaluation"}
           </button>
         </div>
       </form>
 
-      {/* My Submissions History */}
       {mySubmissions.length > 0 && (
         <div className="mt-8">
           <h2 className="text-xl font-bold text-on-surface mb-4">Bài nộp của tôi</h2>
@@ -263,6 +487,17 @@ export default function SubmitPage() {
         </div>
       )}
     </main>
+  );
+}
+
+function InfoChip({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-lg bg-surface-container-high px-4 py-3">
+      <div className="text-xs uppercase tracking-wide text-on-surface-variant mb-1">
+        {label}
+      </div>
+      <div className="text-sm font-medium text-on-surface">{value}</div>
+    </div>
   );
 }
 
@@ -339,4 +574,38 @@ function SubmissionCard({ sub, error }: { sub: Submission; error: string | null 
       )}
     </div>
   );
+}
+
+function formatAbsoluteTime(value: string) {
+  return new Date(value).toLocaleString("vi-VN");
+}
+
+function formatCountdown(resetAt: string, nowMs: number) {
+  const remainingMs = Math.max(0, new Date(resetAt).getTime() - nowMs);
+  if (remainingMs === 0) {
+    return "00:00:00";
+  }
+
+  const totalSeconds = Math.floor(remainingMs / 1000);
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+
+  return [hours, minutes, seconds]
+    .map((value) => value.toString().padStart(2, "0"))
+    .join(":");
+}
+
+async function readJsonResponse<T>(response: Response): Promise<T | null> {
+  const rawText = await response.text();
+  if (!rawText) {
+    return null;
+  }
+
+  try {
+    return JSON.parse(rawText) as T;
+  } catch (error) {
+    console.error("Failed to parse JSON response:", error, rawText);
+    return null;
+  }
 }

@@ -97,23 +97,75 @@ async def create_submission(
 
     saved_filename = f"{int(time.time() * 1000)}_{filename}"
     filepath = submissions_root / saved_filename
-    await asyncio.to_thread(filepath.write_bytes, contents)
+    file_written = False
+    try:
+        await asyncio.to_thread(filepath.write_bytes, contents)
+        file_written = True
+        submission_result = await repositories.create_submission_with_quota(
+            user_id=user_id,
+            contest_id=contest_id,
+            filename=saved_filename,
+            filepath=str(filepath),
+        )
+    except Exception:
+        if file_written:
+            await asyncio.to_thread(filepath.unlink, missing_ok=True)
+        raise
 
-    submission_id = await repositories.create_submission(
-        user_id=user_id,
-        contest_id=contest_id,
-        filename=saved_filename,
-        filepath=str(filepath),
-    )
+    if not submission_result["ok"]:
+        if file_written:
+            await asyncio.to_thread(filepath.unlink, missing_ok=True)
+
+        if submission_result["reason"] == "contest_not_found":
+            return JSONResponse(
+                {"ok": False, "error": "Contest not found"},
+                status_code=status.HTTP_404_NOT_FOUND,
+            )
+
+        if submission_result["reason"] == "submission_limit_reached":
+            return JSONResponse(
+                {
+                    "ok": False,
+                    "code": "SUBMISSION_LIMIT_REACHED",
+                    "error": "You have reached the submission limit for this contest",
+                    "quota": schemas.quota_snapshot_payload(submission_result["quota"]),
+                },
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            )
+
+        return JSONResponse(
+            {"ok": False, "error": "Unable to create submission"},
+            status_code=status.HTTP_400_BAD_REQUEST,
+        )
+
     request.app.state.worker.notify()
 
-    return {"ok": True, "submissionId": submission_id}
+    return {
+        "ok": True,
+        "submissionId": submission_result["submissionId"],
+        "quota": schemas.quota_snapshot_payload(submission_result["quota"]),
+    }
 
 
 @app.get("/api/submissions/user")
 async def list_current_user_submissions(current_user: dict = Depends(get_current_user)):
     submissions = await repositories.fetch_user_submissions(current_user["id"])
     return {"submissions": [schemas.user_submission_payload(row) for row in submissions]}
+
+
+@app.get("/api/submissions/quota")
+async def submission_quota(
+    contest_id: str = Query(..., alias="contestId"),
+    current_user: dict = Depends(get_current_user),
+):
+    quota = await repositories.fetch_submission_quota(current_user["id"], contest_id)
+    if quota is None:
+        return JSONResponse(
+            {"ok": False, "error": "Contest not found"},
+            status_code=status.HTTP_404_NOT_FOUND,
+        )
+
+    return {"ok": True, "quota": schemas.quota_snapshot_payload(quota)}
 
 
 @app.get("/api/submissions/stream")

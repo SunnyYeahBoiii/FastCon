@@ -326,7 +326,7 @@ export default function ContestsPage() {
 
                 <div>
                   <label className="block text-sm font-medium text-on-surface-variant mb-1">
-                    Giới hạn nộp bài/ngày
+                    Giới hạn nộp bài trong 24 giờ từ lần nộp đầu tiên
                   </label>
                   <input
                     type="number"

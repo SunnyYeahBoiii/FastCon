@@ -111,6 +111,9 @@ export async function DELETE(
     await prisma.submission.deleteMany({
       where: { userId: id },
     });
+    await prisma.submissionQuotaWindow.deleteMany({
+      where: { userId: id },
+    });
 
     await prisma.user.delete({
       where: { id },

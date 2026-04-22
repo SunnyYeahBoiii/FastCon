@@ -13,6 +13,7 @@ export async function GET() {
         description: true,
         deadline: true,
         status: true,
+        dailySubmissionLimit: true,
       },
     });
     return NextResponse.json({ contests });
