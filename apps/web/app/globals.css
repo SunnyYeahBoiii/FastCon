@@ -1,28 +1,58 @@
-@import "tailwindcss";
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
 
-@theme {
+:root {
   --color-primary: #003d9b;
+  --tw-color-primary: 0 61 155;
   --color-primary-container: #0052cc;
+  --tw-color-primary-container: 0 82 204;
+  --color-primary-hover: #002f75;
+  --tw-color-primary-hover: 0 47 117;
   --color-on-primary: #ffffff;
+  --tw-color-on-primary: 255 255 255;
   --color-secondary: #4c5d8d;
+  --tw-color-secondary: 76 93 141;
   --color-secondary-container: #b6c8fe;
+  --tw-color-secondary-container: 182 200 254;
   --color-on-secondary: #ffffff;
+  --tw-color-on-secondary: 255 255 255;
+  --color-background: #f7f9fb;
+  --tw-color-background: 247 249 251;
+  --color-on-background: #191c1e;
+  --tw-color-on-background: 25 28 30;
   --color-surface: #f7f9fb;
+  --tw-color-surface: 247 249 251;
   --color-surface-container-lowest: #ffffff;
+  --tw-color-surface-container-lowest: 255 255 255;
   --color-surface-container-low: #f2f4f6;
+  --tw-color-surface-container-low: 242 244 246;
   --color-surface-container: #eceef0;
+  --tw-color-surface-container: 236 238 240;
   --color-surface-container-high: #e6e8ea;
+  --tw-color-surface-container-high: 230 232 234;
   --color-surface-container-highest: #e0e3e5;
+  --tw-color-surface-container-highest: 224 227 229;
   --color-on-surface: #191c1e;
+  --tw-color-on-surface: 25 28 30;
   --color-on-surface-variant: #434654;
+  --tw-color-on-surface-variant: 67 70 84;
   --color-error: #ba1a1a;
+  --tw-color-error: 186 26 26;
   --color-error-container: #ffdad6;
+  --tw-color-error-container: 255 218 214;
   --color-outline: #737685;
+  --tw-color-outline: 115 118 133;
   --color-outline-variant: #c3c6d6;
+  --tw-color-outline-variant: 195 198 214;
   --color-tertiary: #003d9b;
+  --tw-color-tertiary: 0 61 155;
   --color-tertiary-container: #d4e2ff;
+  --tw-color-tertiary-container: 212 226 255;
   --color-on-tertiary: #ffffff;
+  --tw-color-on-tertiary: 255 255 255;
   --color-on-error: #ffffff;
+  --tw-color-on-error: 255 255 255;
 
   --font-headline: "Be Vietnam Pro", sans-serif;
   --font-body: "Be Vietnam Pro", sans-serif;
@@ -35,27 +65,63 @@
 
 :root.dark {
   --color-primary: #a8c8ff;
+  --tw-color-primary: 168 200 255;
   --color-primary-container: #0052cc;
+  --tw-color-primary-container: 0 82 204;
+  --color-primary-hover: #c7dcff;
+  --tw-color-primary-hover: 199 220 255;
   --color-on-primary: #00205a;
+  --tw-color-on-primary: 0 32 90;
   --color-secondary: #b6c8fe;
+  --tw-color-secondary: 182 200 254;
   --color-secondary-container: #4c5d8d;
+  --tw-color-secondary-container: 76 93 141;
   --color-on-secondary: #1a2d5a;
+  --tw-color-on-secondary: 26 45 90;
+  --color-background: #121316;
+  --tw-color-background: 18 19 22;
+  --color-on-background: #e2e2e6;
+  --tw-color-on-background: 226 226 230;
   --color-surface: #121316;
+  --tw-color-surface: 18 19 22;
   --color-surface-container-lowest: #0e0f12;
+  --tw-color-surface-container-lowest: 14 15 18;
   --color-surface-container-low: #191c1e;
+  --tw-color-surface-container-low: 25 28 30;
   --color-surface-container: #1d2022;
+  --tw-color-surface-container: 29 32 34;
   --color-surface-container-high: #282b2d;
+  --tw-color-surface-container-high: 40 43 45;
   --color-surface-container-highest: #333638;
+  --tw-color-surface-container-highest: 51 54 56;
   --color-on-surface: #e2e2e6;
+  --tw-color-on-surface: 226 226 230;
   --color-on-surface-variant: #c3c6d6;
+  --tw-color-on-surface-variant: 195 198 214;
   --color-error: #ffb4ab;
+  --tw-color-error: 255 180 171;
   --color-error-container: #93000a;
+  --tw-color-error-container: 147 0 10;
   --color-outline: #8d909f;
+  --tw-color-outline: 141 144 159;
   --color-outline-variant: #434654;
+  --tw-color-outline-variant: 67 70 84;
   --color-tertiary: #a8c8ff;
+  --tw-color-tertiary: 168 200 255;
   --color-tertiary-container: #003d9b;
+  --tw-color-tertiary-container: 0 61 155;
   --color-on-tertiary: #00205a;
+  --tw-color-on-tertiary: 0 32 90;
   --color-on-error: #380000;
+  --tw-color-on-error: 56 0 0;
+}
+
+@layer base {
+  *,
+  ::before,
+  ::after {
+    border-color: rgb(var(--tw-color-outline-variant) / 0.3);
+  }
 }
 
 body {
