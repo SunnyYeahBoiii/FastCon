@@ -5,7 +5,11 @@
     "apps/*",
     "packages/*"
   ],
-  "packageManager": "npm@11.12.1",
+  "packageManager": "npm@8.19.4",
+  "engines": {
+    "node": ">=16.14.0",
+    "npm": ">=8.0.0"
+  },
   "scripts": {
     "build": "turbo run build",
     "dev": "turbo run dev",
@@ -17,7 +21,7 @@
     "dev:api": "npm --workspace @repo/api run dev",
     "db:push": "npm --workspace @repo/web run db:push",
     "seed": "npm --workspace @repo/web run seed",
-    "prisma:generate": "npm exec --workspace @repo/web prisma generate"
+    "prisma:generate": "npm --workspace @repo/web run prisma:generate"
   },
   "devDependencies": {
     "turbo": "^2.9.6"

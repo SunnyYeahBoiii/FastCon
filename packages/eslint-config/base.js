@@ -1,7 +1,8 @@
 import js from "@eslint/js";
+import tseslint from "@typescript-eslint/eslint-plugin";
+import tsParser from "@typescript-eslint/parser";
 import eslintConfigPrettier from "eslint-config-prettier";
 import turboPlugin from "eslint-plugin-turbo";
-import tseslint from "typescript-eslint";
 import onlyWarn from "eslint-plugin-only-warn";
 
 /**
@@ -12,7 +13,21 @@ import onlyWarn from "eslint-plugin-only-warn";
 export const config = [
   js.configs.recommended,
   eslintConfigPrettier,
-  ...tseslint.configs.recommended,
+  {
+    files: ["**/*.{ts,tsx,mts,cts}"],
+    languageOptions: {
+      parser: tsParser,
+      parserOptions: {
+        sourceType: "module",
+      },
+    },
+    plugins: {
+      "@typescript-eslint": tseslint,
+    },
+    rules: {
+      ...tseslint.configs.recommended.rules,
+    },
+  },
   {
     plugins: {
       turbo: turboPlugin,
