@@ -1,7 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getFastApiInternalUrl } from "@/lib/runtimeConfig";
 
-export async function proxy(request: NextRequest) {
+function getFastApiInternalUrl(): string | null {
+  const raw =
+    process.env.FASTAPI_INTERNAL_URL?.trim() ||
+    process.env.JUDGE_SERVICE_URL?.trim();
+  if (!raw) return null;
+  return raw.endsWith("/") ? raw.slice(0, -1) : raw;
+}
+
+export function middleware(request: NextRequest) {
   const fastApiInternalUrl = getFastApiInternalUrl();
   if (!fastApiInternalUrl) {
     return NextResponse.next();

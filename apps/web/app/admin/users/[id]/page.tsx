@@ -74,10 +74,10 @@ function getStatusText(status: string): string {
   }
 }
 
-export default function UserDetailPage({ params }: { params: Promise<{ id: string }> }) {
+export default function UserDetailPage({ params }: { params: { id: string } }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
-  const [userId, setUserId] = useState<string>("");
+  const userId = params.id;
 
   // Password form state
   const [newPassword, setNewPassword] = useState("");
@@ -87,12 +87,6 @@ export default function UserDetailPage({ params }: { params: Promise<{ id: strin
   const [isUpdatingPassword, setIsUpdatingPassword] = useState(false);
 
   useEffect(() => {
-    params.then((p) => setUserId(p.id));
-  }, [params]);
-
-  useEffect(() => {
-    if (!userId) return;
-
     const fetchUser = async () => {
       try {
         const res = await fetch(`/api/users/${userId}`);

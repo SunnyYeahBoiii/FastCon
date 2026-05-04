@@ -5,12 +5,12 @@ import { requireAdminApi } from "@/lib/guard";
 
 export async function PUT(
   request: Request,
-  { params }: { params: Promise<{ id: string }> }
+  { params }: { params: { id: string } }
 ) {
   const guard = await requireAdminApi();
   if (guard instanceof Response) return guard;
 
-  const { id } = await params;
+  const { id } = params;
 
   try {
     const body = await request.json();

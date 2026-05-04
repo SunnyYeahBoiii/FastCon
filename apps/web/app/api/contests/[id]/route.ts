@@ -5,13 +5,13 @@ import { parseDailySubmissionLimit } from "../validation";
 
 export async function GET(
   request: Request,
-  { params }: { params: Promise<{ id: string }> }
+  { params }: { params: { id: string } }
 ) {
   const guard = await requireAdminApi();
   if (guard instanceof Response) return guard;
 
   try {
-    const { id } = await params;
+    const { id } = params;
 
     const contest = await prisma.contest.findUnique({
       where: { id },
@@ -44,13 +44,13 @@ export async function GET(
 
 export async function PUT(
   request: Request,
-  { params }: { params: Promise<{ id: string }> }
+  { params }: { params: { id: string } }
 ) {
   const guard = await requireAdminApi();
   if (guard instanceof Response) return guard;
 
   try {
-    const { id } = await params;
+    const { id } = params;
     const body = await request.json();
     const { title, description, deadline, status, dailySubmissionLimit } = body;
     const parsedLimit = parseDailySubmissionLimit(dailySubmissionLimit);
@@ -108,13 +108,13 @@ export async function PUT(
 
 export async function DELETE(
   request: Request,
-  { params }: { params: Promise<{ id: string }> }
+  { params }: { params: { id: string } }
 ) {
   const guard = await requireAdminApi();
   if (guard instanceof Response) return guard;
 
   try {
-    const { id } = await params;
+    const { id } = params;
 
     const contest = await prisma.contest.findUnique({
       where: { id },

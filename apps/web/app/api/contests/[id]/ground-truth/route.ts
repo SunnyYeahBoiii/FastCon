@@ -7,13 +7,13 @@ import { getTestdataRoot } from "@/lib/runtimeConfig";
 
 export async function POST(
   request: Request,
-  { params }: { params: Promise<{ id: string }> }
+  { params }: { params: { id: string } }
 ) {
   const guard = await requireAdminApi();
   if (guard instanceof Response) return guard;
 
   try {
-    const { id } = await params;
+    const { id } = params;
 
     const contest = await prisma.contest.findUnique({
       where: { id },

@@ -3,7 +3,7 @@ import { cookies } from "next/headers";
 import { prisma } from "./db";
 
 export async function requireAdminApi() {
-  const cookieStore = await cookies();
+  const cookieStore = cookies();
   const sessionId = cookieStore.get("session")?.value;
   if (!sessionId)
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });

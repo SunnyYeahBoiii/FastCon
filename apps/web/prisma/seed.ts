@@ -1,6 +1,5 @@
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { PrismaBetterSqlite3 } from "@prisma/adapter-better-sqlite3";
 import { PrismaClient } from "@prisma/client";
 import dotenv from "dotenv";
 import { hashPassword } from "../lib/auth";
@@ -10,10 +9,7 @@ const APP_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), ".."
 dotenv.config({ path: path.join(APP_ROOT, ".env.local") });
 dotenv.config({ path: path.join(APP_ROOT, ".env") });
 
-const adapter = new PrismaBetterSqlite3({
-  url: process.env.DATABASE_URL!,
-});
-const prisma = new PrismaClient({ adapter });
+const prisma = new PrismaClient();
 
 const ADMIN_PASSWORD =
   process.env.SEED_ADMIN_PASSWORD || "admin123";

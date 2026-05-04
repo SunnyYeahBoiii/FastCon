@@ -9,7 +9,7 @@ import SubmissionsTable from "./SubmissionsTable";
 import EvaluateCodeSection from "./EvaluateCodeSection";
 
 interface ContestDetailPageProps {
-  params: Promise<{ id: string }>;
+  params: { id: string };
 }
 
 async function getContest(id: string) {
@@ -29,7 +29,7 @@ async function getContest(id: string) {
 
 export default async function ContestDetailPage({ params }: ContestDetailPageProps) {
   await requireAdmin();
-  const { id } = await params;
+  const { id } = params;
   const contest = await getContest(id);
 
   if (!contest) {
