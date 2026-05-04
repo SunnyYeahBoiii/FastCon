@@ -26,10 +26,10 @@ If your machine does not provide `apt-get`, install those dependencies manually 
 
 FastCons requires:
 
-- Node.js `>= 20`
-- npm `>= 10`
+- Node.js `>= 16`
+- npm `>= 8`
 
-This matters because the repository uses a modern Next.js, Prisma, and npm workspace toolchain.
+This matters because the repository targets an Ubuntu 18.04-compatible Next.js, Prisma, and npm workspace toolchain.
 
 ## Quick Start
 
@@ -54,7 +54,7 @@ chmod +x first-run.sh start-application.sh
 In order, it does the following:
 
 1. Verifies that `python3` exists.
-2. Ensures a compatible `node` and `npm` are available. If they are missing or too old and `apt-get` is available, it installs a modern Node.js runtime.
+2. Ensures a compatible `node` and `npm` are available. If they are missing or too old and `apt-get` is available, it installs a Node.js 16 runtime.
 3. Ensures Python venv support exists. If `python3 -m venv` is unavailable and `apt-get` is available, it installs `python3-venv`.
 4. Creates `.venv` at the repository root if it does not already exist.
 5. Activates `.venv`.
@@ -104,7 +104,7 @@ Variables currently written by setup:
 
 In order, it does the following:
 
-1. Ensures a compatible `node` and `npm` exist, installing a modern Node.js runtime via `apt-get` when available.
+1. Ensures a compatible `node` and `npm` exist, installing Node.js 16 via `apt-get` when available.
 2. Ensures Python venv support exists, installing `python3-venv` via `apt-get` when available.
 3. Creates `.venv` if it does not already exist.
 4. Activates `.venv`.
@@ -223,16 +223,16 @@ If either application reports missing env files, rerun:
 ./first-run.sh
 ```
 
-### Prisma client or Better SQLite native binding errors
+### Prisma client errors
 
-If the web app fails with missing Prisma client artifacts or `better_sqlite3.node` binding errors, regenerate the Prisma client and make sure dependencies are installed:
+If the web app fails with missing Prisma client artifacts, regenerate the Prisma client and make sure dependencies are installed:
 
 ```bash
 npm install
 npm run prisma:generate
 ```
 
-If the problem happens during the scripted start flow, `./start-application.sh` already runs `npm run prisma:generate`, so repeated failures usually mean the dependency install is incomplete or the native package was not built correctly for the current machine.
+If the problem happens during the scripted start flow, `./start-application.sh` already runs `npm run prisma:generate`, so repeated failures usually mean the dependency install is incomplete.
 
 ### Python venv support is missing
 
@@ -245,8 +245,8 @@ If the scripts report that `python3 -m venv` is unavailable:
 
 If your system does not have `apt-get`, install a modern toolchain manually and rerun:
 
-- Node.js `>= 20`
-- npm `>= 10`
+- Node.js `>= 16`
+- npm `>= 8`
 
 Then run:
 

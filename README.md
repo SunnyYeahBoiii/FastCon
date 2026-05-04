@@ -47,11 +47,11 @@ These routes are handled inside `apps/web` and usually talk to SQLite through Pr
 - admin user management
 - public contest listing
 
-In this path, the browser calls a Next.js route handler or loads a Next.js page, and the handler uses Prisma with the Better SQLite adapter to access the shared database.
+In this path, the browser calls a Next.js route handler or loads a Next.js page, and the handler uses Prisma's SQLite datasource to access the shared database.
 
 #### 2. Rewritten FastAPI path
 
-These routes are matched by `apps/web/proxy.ts` and rewritten from Next.js to the internal FastAPI service:
+These routes are matched by `apps/web/middleware.ts` and rewritten from Next.js to the internal FastAPI service:
 
 - `/api/submissions/*`
 - `/api/leaderboard/*`
@@ -90,7 +90,7 @@ fast-con/
 │   │   ├── components/          # Reusable UI components
 │   │   ├── lib/                 # Auth, guards, db, runtime config
 │   │   ├── prisma/              # Prisma schema and seed script
-│   │   └── proxy.ts             # Rewrite rules to FastAPI
+│   │   └── middleware.ts        # Rewrite rules to FastAPI
 │   └── api/                     # Internal FastAPI service
 │       ├── backend/             # FastAPI app, auth, repositories, worker, SSE
 │       ├── scripts/             # Judge runner and Python helpers
@@ -115,9 +115,9 @@ fast-con/
 If you are new to the repository, these are the most useful places to start:
 
 - `apps/web/app`: user pages, admin pages, and route handlers
-- `apps/web/lib/db.ts`: Prisma client configuration using Better SQLite
+- `apps/web/lib/db.ts`: Prisma client configuration for SQLite
 - `apps/web/lib/runtimeConfig.ts`: shared path and runtime env resolution for the web app
-- `apps/web/proxy.ts`: rewrite layer from web routes to the internal API
+- `apps/web/middleware.ts`: rewrite layer from web routes to the internal API
 - `apps/web/prisma/schema.prisma`: source of truth for the database schema
 - `apps/web/prisma/seed.ts`: admin user and sample contest seed logic
 - `apps/api/backend/main.py`: FastAPI entrypoint and submission/leaderboard endpoints
@@ -230,10 +230,10 @@ The setup script also writes compatibility aliases that still exist in the runti
 - `UPLOAD_DIR`
 - `MAX_CONCURRENT_JUDGES`
 
-The setup and start scripts also validate the JavaScript runtime before running `npm install`. FastCons requires a modern Node.js/npm toolchain:
+The setup and start scripts also validate the JavaScript runtime before running `npm install`. FastCons targets the Ubuntu 18.04-compatible Node.js/npm toolchain:
 
-- Node.js `>= 20`
-- npm `>= 10`
+- Node.js `>= 16`
+- npm `>= 8`
 
 On Debian/Ubuntu-style systems with `apt-get`, the scripts will attempt to install a compatible Node.js runtime automatically.
 

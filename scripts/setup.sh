@@ -15,9 +15,9 @@ WORKER_POLL_MS="${WORKER_POLL_MS:-1000}"
 WORKER_MAX_CONCURRENT="${WORKER_MAX_CONCURRENT:-3}"
 JUDGE_TIMEOUT_SECONDS="${JUDGE_TIMEOUT_SECONDS:-120}"
 MAX_UPLOAD_BYTES="${MAX_UPLOAD_BYTES:-10485760}"
-MIN_NODE_MAJOR=20
-MIN_NPM_MAJOR=10
-TARGET_NODE_MAJOR=22
+MIN_NODE_MAJOR=16
+MIN_NPM_MAJOR=8
+TARGET_NODE_MAJOR=16
 
 GREEN='\033[0;32m'
 RED='\033[0;31m'
@@ -83,7 +83,7 @@ ensure_node_and_npm() {
 
     if command -v node >/dev/null 2>&1 || command -v npm >/dev/null 2>&1; then
         warn "Detected unsupported Node.js/npm versions."
-        warn "FastCons requires Node.js >= $MIN_NODE_MAJOR and npm >= $MIN_NPM_MAJOR for the current Next.js, Prisma, and npm workspace toolchain."
+        warn "FastCons requires Node.js >= $MIN_NODE_MAJOR and npm >= $MIN_NPM_MAJOR for the Ubuntu 18.04-compatible Next.js, Prisma, and npm workspace toolchain."
         if command -v node >/dev/null 2>&1; then
             warn "Current node: $(node --version)"
         fi
