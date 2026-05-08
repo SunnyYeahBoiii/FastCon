@@ -4,7 +4,13 @@ import { cookies } from "next/headers";
 export async function POST() {
   try {
     const cookieStore = cookies();
-    cookieStore.delete("session");
+    cookieStore.set("session", "", {
+      path: "/",
+      maxAge: 0,
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+    });
 
     return NextResponse.json({
       ok: true,

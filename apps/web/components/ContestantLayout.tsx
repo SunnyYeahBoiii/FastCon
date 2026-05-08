@@ -25,7 +25,8 @@ export default function ContestantLayout({
 
   const handleLogout = async () => {
     await fetch("/cs116.khtn/api/logout", { method: "POST" });
-    router.push("/login");
+    router.replace("/login");
+    router.refresh();
   };
 
   return (

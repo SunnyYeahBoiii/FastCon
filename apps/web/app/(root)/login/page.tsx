@@ -2,13 +2,14 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import type { FormEvent } from "react";
 
 export default function LoginPage() {
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const router = useRouter();
 
-  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (e: FormEvent<any>) => {
     e.preventDefault();
     setError("");
     setSubmitting(true);
@@ -31,8 +32,9 @@ export default function LoginPage() {
         return;
       }
 
-      // Use Next router so basePath is applied in production deployments.
-      router.replace(data.user.role === "admin" ? "/admin/contests" : "/");
+      const targetPath = data.user.role === "admin" ? "/admin/contests" : "/";
+      router.replace(targetPath);
+      router.refresh();
     } catch {
       setError("Lỗi kết nối");
     } finally {
