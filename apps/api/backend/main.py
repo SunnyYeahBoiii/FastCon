@@ -46,6 +46,20 @@ async def validation_exception_handler(_request: Request, exc: RequestValidation
     return JSONResponse({"ok": False, "error": message}, status_code=status.HTTP_400_BAD_REQUEST)
 
 
+STARTED_AT = time.time()
+
+
+@app.get("/api/lifecheck")
+async def lifecheck():
+    # Lightweight liveness probe for load balancers / uptime monitors.
+    # Keep it dependency-free (no DB / auth calls).
+    return {
+        "ok": True,
+        "service": "fast-con internal api",
+        "uptimeSeconds": int(time.time() - STARTED_AT),
+    }
+
+
 @app.get("/api/submissions")
 async def list_submissions(_admin_user: dict = Depends(get_admin_user)):
     submissions = await repositories.fetch_admin_submissions()
