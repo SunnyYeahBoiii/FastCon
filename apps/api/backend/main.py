@@ -292,6 +292,7 @@ async def leaderboard_stream(
     last_serialized = json.dumps(initial_payload, sort_keys=True, separators=(",", ":"))
 
     async def event_generator():
+        nonlocal last_serialized
         started_at = asyncio.get_running_loop().time()
         heartbeat_deadline = started_at + 15
         yield default_event({"type": "initial", "leaderboard": initial_payload})
