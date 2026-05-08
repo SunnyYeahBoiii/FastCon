@@ -52,16 +52,22 @@ def _build_quota_snapshot(
     *,
     contest_id: str,
     daily_submission_limit: Any,
+    contest_deadline: Any,
     window_started_at: Any,
     submission_count: Any,
     now: datetime | None = None,
 ) -> dict[str, Any]:
     current_time = now or _utc_now()
+    deadline = _coerce_datetime(contest_deadline)
+    is_deadline_passed = deadline is not None and current_time > deadline
     limit = _normalize_submission_limit(daily_submission_limit)
     if limit is None:
         return {
             "contestId": contest_id,
             "dailySubmissionLimit": None,
+            "deadline": deadline,
+            "serverNow": current_time,
+            "isDeadlinePassed": is_deadline_passed,
             "used": 0,
             "remaining": None,
             "windowStartedAt": None,
@@ -75,6 +81,9 @@ def _build_quota_snapshot(
         return {
             "contestId": contest_id,
             "dailySubmissionLimit": limit,
+            "deadline": deadline,
+            "serverNow": current_time,
+            "isDeadlinePassed": is_deadline_passed,
             "used": 0,
             "remaining": limit,
             "windowStartedAt": None,
@@ -88,6 +97,9 @@ def _build_quota_snapshot(
         return {
             "contestId": contest_id,
             "dailySubmissionLimit": limit,
+            "deadline": deadline,
+            "serverNow": current_time,
+            "isDeadlinePassed": is_deadline_passed,
             "used": 0,
             "remaining": limit,
             "windowStartedAt": None,
@@ -101,6 +113,9 @@ def _build_quota_snapshot(
     return {
         "contestId": contest_id,
         "dailySubmissionLimit": limit,
+        "deadline": deadline,
+        "serverNow": current_time,
+        "isDeadlinePassed": is_deadline_passed,
         "used": used,
         "remaining": remaining,
         "windowStartedAt": started_at,
@@ -280,6 +295,7 @@ async def fetch_submission_quota(user_id: str, contest_id: str) -> dict[str, Any
     return _build_quota_snapshot(
         contest_id=contest_id,
         daily_submission_limit=contest["dailySubmissionLimit"],
+        contest_deadline=contest["deadline"],
         window_started_at=quota_row["windowStartedAt"] if quota_row else None,
         submission_count=quota_row["submissionCount"] if quota_row else 0,
     )
@@ -301,13 +317,30 @@ async def create_submission_with_quota(
         await connection.execute("BEGIN IMMEDIATE")
 
         contest_cursor = await connection.execute(
-            'SELECT "id", "dailySubmissionLimit" FROM "Contest" WHERE "id" = ?',
+            'SELECT "id", "dailySubmissionLimit", "deadline" FROM "Contest" WHERE "id" = ?',
             (contest_id,),
         )
         contest = _row_to_dict(await contest_cursor.fetchone())
         if contest is None:
             await connection.rollback()
             return {"ok": False, "reason": "contest_not_found"}
+
+        deadline = _coerce_datetime(contest["deadline"])
+        if deadline is not None and now > deadline:
+            quota_snapshot = _build_quota_snapshot(
+                contest_id=contest_id,
+                daily_submission_limit=contest["dailySubmissionLimit"],
+                contest_deadline=contest["deadline"],
+                window_started_at=None,
+                submission_count=0,
+                now=now,
+            )
+            await connection.rollback()
+            return {
+                "ok": False,
+                "reason": "deadline_passed",
+                "quota": quota_snapshot,
+            }
 
         limit = _normalize_submission_limit(contest["dailySubmissionLimit"])
         quota_snapshot: dict[str, Any]
@@ -328,6 +361,7 @@ async def create_submission_with_quota(
             current_quota = _build_quota_snapshot(
                 contest_id=contest_id,
                 daily_submission_limit=limit,
+                contest_deadline=contest["deadline"],
                 window_started_at=quota_row["windowStartedAt"] if quota_row else None,
                 submission_count=quota_row["submissionCount"] if quota_row else 0,
                 now=now,
@@ -358,6 +392,7 @@ async def create_submission_with_quota(
                 quota_snapshot = _build_quota_snapshot(
                     contest_id=contest_id,
                     daily_submission_limit=limit,
+                    contest_deadline=contest["deadline"],
                     window_started_at=now,
                     submission_count=1,
                     now=now,
@@ -374,6 +409,7 @@ async def create_submission_with_quota(
                 quota_snapshot = _build_quota_snapshot(
                     contest_id=contest_id,
                     daily_submission_limit=limit,
+                    contest_deadline=contest["deadline"],
                     window_started_at=now,
                     submission_count=1,
                     now=now,
@@ -391,6 +427,7 @@ async def create_submission_with_quota(
                 quota_snapshot = _build_quota_snapshot(
                     contest_id=contest_id,
                     daily_submission_limit=limit,
+                    contest_deadline=contest["deadline"],
                     window_started_at=quota_row["windowStartedAt"],
                     submission_count=new_submission_count,
                     now=now,
@@ -399,6 +436,7 @@ async def create_submission_with_quota(
             quota_snapshot = _build_quota_snapshot(
                 contest_id=contest_id,
                 daily_submission_limit=None,
+                contest_deadline=contest["deadline"],
                 window_started_at=None,
                 submission_count=0,
                 now=now,

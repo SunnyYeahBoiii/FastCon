@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/db";
-import { Trophy, Users, Clock, ArrowRight } from "lucide-react";
+import { Users } from "lucide-react";
 
 export default async function ContestsPage() {
   // Fetch contests from database
@@ -41,17 +41,14 @@ export default async function ContestsPage() {
         <div className="bg-surface-container-low rounded-xl overflow-hidden shadow-sm">
           {/* Header row */}
           <div className="grid grid-cols-12 gap-4 px-6 py-4 bg-surface-container-high/50 border-b border-outline-variant/20">
-            <div className="col-span-6 text-sm font-bold text-on-surface-variant uppercase tracking-wider">
+            <div className="col-span-7 text-sm font-bold text-on-surface-variant uppercase tracking-wider">
               Contest Name
             </div>
             <div className="col-span-2 text-sm font-bold text-on-surface-variant uppercase tracking-wider text-center">
               Status
             </div>
-            <div className="col-span-2 text-sm font-bold text-on-surface-variant uppercase tracking-wider text-center">
+            <div className="col-span-3 text-sm font-bold text-on-surface-variant uppercase tracking-wider text-center">
               Deadline
-            </div>
-            <div className="col-span-2 text-sm font-bold text-on-surface-variant uppercase tracking-wider text-center">
-              Duration
             </div>
           </div>
 
@@ -71,7 +68,7 @@ export default async function ContestsPage() {
                 }`}
               >
                 {/* Contest title and metadata */}
-                <div className="col-span-6">
+                <div className="col-span-7">
                   <h4 className="text-lg font-bold text-primary mb-1">
                     {contest.title}
                   </h4>
@@ -96,10 +93,10 @@ export default async function ContestsPage() {
                 </div>
 
                 {/* Deadline */}
-                <div className="col-span-2 text-center">
+                <div className="col-span-3 text-center">
                   <p className="text-sm font-medium text-on-surface">
                     {contest.deadline
-                      ? new Date(contest.deadline).toLocaleDateString("en-US", {
+                      ? new Date(contest.deadline).toLocaleDateString("vi-VN", {
                           month: "short",
                           day: "numeric",
                           year: "numeric",
@@ -108,20 +105,13 @@ export default async function ContestsPage() {
                   </p>
                   {contest.deadline && (
                     <p className="text-[10px] text-on-surface-variant">
-                      {new Date(contest.deadline).toLocaleTimeString("en-US", {
+                      {new Date(contest.deadline).toLocaleTimeString("vi-VN", {
                         hour: "2-digit",
                         minute: "2-digit",
+                        hour12: false,
                       })}
                     </p>
                   )}
-                </div>
-
-                {/* Duration placeholder */}
-                <div className="col-span-2 text-center">
-                  <div className="inline-flex items-center gap-1 bg-surface-container-high px-3 py-1 rounded-full text-xs font-semibold text-on-surface-variant">
-                    <Clock className="w-3 h-3" />
-                    300m
-                  </div>
                 </div>
               </div>
             ))

@@ -77,6 +77,9 @@ def quota_snapshot_payload(snapshot: dict[str, Any]) -> dict[str, Any]:
     return {
         "contestId": snapshot["contestId"],
         "dailySubmissionLimit": snapshot["dailySubmissionLimit"],
+        "deadline": _serialize_datetime(snapshot["deadline"]),
+        "serverNow": _serialize_datetime(snapshot["serverNow"]),
+        "isDeadlinePassed": snapshot["isDeadlinePassed"],
         "used": snapshot["used"],
         "remaining": snapshot["remaining"],
         "windowStartedAt": _serialize_datetime(snapshot["windowStartedAt"]),

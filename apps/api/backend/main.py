@@ -147,6 +147,17 @@ async def create_submission(
                 status_code=status.HTTP_429_TOO_MANY_REQUESTS,
             )
 
+        if submission_result["reason"] == "deadline_passed":
+            return JSONResponse(
+                {
+                    "ok": False,
+                    "code": "CONTEST_DEADLINE_PASSED",
+                    "error": "Contest submission deadline has passed",
+                    "quota": schemas.quota_snapshot_payload(submission_result["quota"]),
+                },
+                status_code=status.HTTP_400_BAD_REQUEST,
+            )
+
         return JSONResponse(
             {"ok": False, "error": "Unable to create submission"},
             status_code=status.HTTP_400_BAD_REQUEST,

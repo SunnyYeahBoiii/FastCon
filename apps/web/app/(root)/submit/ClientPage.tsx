@@ -25,6 +25,9 @@ interface Submission {
 interface SubmissionQuota {
   contestId: string;
   dailySubmissionLimit: number | null;
+  deadline: string | null;
+  serverNow: string;
+  isDeadlinePassed: boolean;
   used: number;
   remaining: number | null;
   windowStartedAt: string | null;
@@ -44,16 +47,17 @@ export default function SubmitPage() {
   const [quotaError, setQuotaError] = useState<string | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [submitNotice, setSubmitNotice] = useState<string | null>(null);
-  const [nowMs, setNowMs] = useState(() => Date.now());
+  const [serverTimeOffsetMs, setServerTimeOffsetMs] = useState(0);
+  const [nowMs, setNowMs] = useState(() => Date.now() + serverTimeOffsetMs);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     const intervalId = window.setInterval(() => {
-      setNowMs(Date.now());
+      setNowMs(Date.now() + serverTimeOffsetMs);
     }, 1000);
 
     return () => window.clearInterval(intervalId);
-  }, []);
+  }, [serverTimeOffsetMs]);
 
   useEffect(() => {
     fetch("/cs116.khtn/api/public/contests")
@@ -84,6 +88,13 @@ export default function SubmitPage() {
 
       if (!response.ok) {
         throw new Error(data?.error || "Không thể tải quota nộp bài");
+      }
+
+      if (data?.quota?.serverNow) {
+        const serverNowMs = new Date(data.quota.serverNow).getTime();
+        if (!Number.isNaN(serverNowMs)) {
+          setServerTimeOffsetMs(serverNowMs - Date.now());
+        }
       }
 
       setSelectedContestQuota(data?.quota ?? null);
@@ -178,6 +189,7 @@ export default function SubmitPage() {
     quotaLoading ||
     !selectedContest ||
     !selectedFile ||
+    Boolean(selectedContestQuota?.isDeadlinePassed) ||
     Boolean(selectedContestQuota?.isQuotaExceeded);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -215,6 +227,11 @@ export default function SubmitPage() {
       return;
     }
 
+    if (selectedContestQuota?.isDeadlinePassed) {
+      setSubmitError("Đã quá hạn nộp bài cho contest này.");
+      return;
+    }
+
     setIsSubmitting(true);
 
     try {
@@ -227,6 +244,7 @@ export default function SubmitPage() {
         body: formData,
       });
       const data = await readJsonResponse<{
+        code?: string;
         error?: string;
         quota?: SubmissionQuota;
       }>(response);
@@ -245,7 +263,11 @@ export default function SubmitPage() {
         if (data?.quota) {
           setSelectedContestQuota(data.quota);
         }
-        setSubmitError(data?.error || "Không thể nộp bài");
+        if (data?.code === "CONTEST_DEADLINE_PASSED") {
+          setSubmitError("Đã quá hạn nộp bài cho contest này.");
+        } else {
+          setSubmitError(data?.error || "Không thể nộp bài");
+        }
       }
     } catch (error) {
       console.error("Submission error:", error);
@@ -353,6 +375,12 @@ export default function SubmitPage() {
             {quotaError ? (
               <div className="rounded-lg border border-error-container/30 bg-error-container/15 px-4 py-3 text-sm text-error">
                 {quotaError}
+              </div>
+            ) : null}
+
+            {!quotaLoading && selectedContestQuota?.isDeadlinePassed ? (
+              <div className="rounded-lg border border-error-container/30 bg-error-container/15 px-4 py-3 text-sm text-error">
+                Contest đã quá hạn nộp bài. Hệ thống dùng thời gian backend để xác định hạn chót.
               </div>
             ) : null}
 
@@ -468,7 +496,13 @@ export default function SubmitPage() {
             }`}
           >
             <Send className="w-4 h-4" />
-            {isSubmitting ? "Submitting..." : quotaLoading ? "Checking quota..." : "Submit Evaluation"}
+            {isSubmitting
+              ? "Submitting..."
+              : quotaLoading
+                ? "Checking quota..."
+                : selectedContestQuota?.isDeadlinePassed
+                  ? "Submission Closed"
+                  : "Submit Evaluation"}
           </button>
         </div>
       </form>
