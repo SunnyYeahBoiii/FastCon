@@ -1,6 +1,10 @@
+/* global window, document, localStorage, MediaQueryListEvent */
 "use client";
 
 import { createContext, useContext, useEffect, useState, ReactNode, useCallback } from "react";
+
+const THEME_STORAGE_KEY = "theme";
+const THEME_COOKIE_KEY = "theme";
 
 interface ThemeContextType {
   isDark: boolean;
@@ -12,19 +16,44 @@ const ThemeContext = createContext<ThemeContextType>({
   toggle: () => {},
 });
 
+function persistTheme(theme: "light" | "dark") {
+  localStorage.setItem(THEME_STORAGE_KEY, theme);
+  document.cookie = `${THEME_COOKIE_KEY}=${theme}; path=/; max-age=31536000; samesite=lax`;
+}
+
+function readThemeFromCookie(): "light" | "dark" | null {
+  const cookie = document.cookie
+    .split("; ")
+    .find((entry) => entry.startsWith(`${THEME_COOKIE_KEY}=`));
+  if (!cookie) return null;
+  const value = cookie.split("=")[1];
+  if (value === "dark" || value === "light") return value;
+  return null;
+}
+
 export function ThemeProvider({ children }: { children: ReactNode }) {
   const [isDark, setIsDark] = useState(false);
 
   useEffect(() => {
-    // Inline script already sets initial theme — just sync React state
-    const isDark = document.documentElement.classList.contains("dark");
-    setIsDark(isDark);
+    const savedTheme = localStorage.getItem(THEME_STORAGE_KEY);
+    const cookieTheme = readThemeFromCookie();
+    const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+
+    const theme =
+      savedTheme === "dark" || savedTheme === "light"
+        ? savedTheme
+        : cookieTheme ?? (prefersDark ? "dark" : "light");
+
+    const dark = theme === "dark";
+    document.documentElement.classList.toggle("dark", dark);
+    setIsDark(dark);
+    persistTheme(theme);
 
     const media = window.matchMedia("(prefers-color-scheme: dark)");
     const handler = (e: MediaQueryListEvent) => {
       const dark = e.matches;
       document.documentElement.classList.toggle("dark", dark);
-      localStorage.setItem("theme", dark ? "dark" : "light");
+      persistTheme(dark ? "dark" : "light");
       setIsDark(dark);
     };
     media.addEventListener("change", handler);
@@ -35,7 +64,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     setIsDark((prev) => {
       const next = !prev;
       document.documentElement.classList.toggle("dark", next);
-      localStorage.setItem("theme", next ? "dark" : "light");
+      persistTheme(next ? "dark" : "light");
       return next;
     });
   }, []);

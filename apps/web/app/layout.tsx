@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { cookies } from "next/headers";
 import "./globals.css";
 import { ThemeProvider } from "@/lib/theme";
 
@@ -12,8 +13,16 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const cookieStore = cookies();
+  const themeCookie = cookieStore.get("theme")?.value;
+  const initialThemeClass = themeCookie === "dark" ? "dark" : "";
+
   return (
-    <html lang="vi" className="h-full" suppressHydrationWarning>
+    <html
+      lang="vi"
+      className={`h-full ${initialThemeClass}`.trim()}
+      suppressHydrationWarning
+    >
       <head>
         <link
           rel="stylesheet"
@@ -25,10 +34,15 @@ export default function RootLayout({
               (function() {
                 try {
                   var saved = localStorage.getItem("theme");
-                  var prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
-                  if (saved === "dark" || (!saved && prefersDark)) {
-                    document.documentElement.classList.add("dark");
+                  if (!saved) {
+                    var cookie = document.cookie
+                      .split("; ")
+                      .find(function(entry) { return entry.startsWith("theme="); });
+                    if (cookie) saved = cookie.split("=")[1];
                   }
+                  var prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+                  var dark = saved === "dark" || (!saved && prefersDark);
+                  document.documentElement.classList.toggle("dark", dark);
                 } catch (e) {}
               })();
             `,
