@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { Search, Eye, Trash2, Plus, X, UserPlus, FileJson } from "lucide-react";
+import Link from "next/link";
 
 interface User {
   id: string;
@@ -321,12 +322,12 @@ export default function UsersPage() {
                     </div>
                   </td>
                   <td className="py-4 px-6 text-right">
-                    <a
+                    <Link
                       href={`/admin/users/${user.id}`}
                       className="p-2 text-on-surface-variant hover:text-primary transition-colors rounded hover:bg-surface-container-high mr-1 inline-flex items-center justify-center"
                     >
                       <Eye className="w-5 h-5" />
-                    </a>
+                    </Link>
                     <button
                       onClick={() => {
                         setUserToDelete(user);
