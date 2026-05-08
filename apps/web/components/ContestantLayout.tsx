@@ -3,6 +3,7 @@
 import { Home, Trophy, Upload, LogOut, User } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
+import type { ReactNode } from "react";
 import { ThemeToggle } from "@/components/ThemeToggle";
 
 const navItems = [
@@ -13,7 +14,7 @@ const navItems = [
 
 interface ContestantLayoutProps {
   user: { id: string; name: string; username: string; role: string } | null;
-  children: React.ReactNode;
+  children: ReactNode;
 }
 
 export default function ContestantLayout({
@@ -67,7 +68,7 @@ export default function ContestantLayout({
                   Xin chào, <span className="font-medium text-on-surface">{user.name}</span>
                 </span>
                 <Link
-                  href="/profile"
+                  href={user.role === "admin" ? "/admin/contests" : "/profile"}
                   className="p-2 rounded hover:bg-surface-container-high/20 transition-colors"
                   aria-label="Profile"
                 >
