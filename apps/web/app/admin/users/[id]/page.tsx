@@ -47,12 +47,15 @@ function formatDate(dateString: string): string {
 function getStatusColor(status: string): string {
   switch (status) {
     case "graded":
-      return "bg-primary-container text-on-primary";
+      return "bg-primary-container text-on-primary-container";
     case "uploaded":
+    case "queued":
       return "bg-surface-container-high text-on-surface-variant";
     case "grading":
+    case "running":
       return "bg-tertiary-container text-on-tertiary";
     case "error":
+    case "failed":
       return "bg-error-container text-error";
     default:
       return "bg-surface-container-high text-on-surface-variant";
@@ -64,10 +67,13 @@ function getStatusText(status: string): string {
     case "graded":
       return "Đã chấm";
     case "uploaded":
+    case "queued":
       return "Chờ chấm";
     case "grading":
+    case "running":
       return "Đang chấm";
     case "error":
+    case "failed":
       return "Lỗi";
     default:
       return status;
@@ -293,7 +299,11 @@ export default function UserDetailPage({ params }: { params: { id: string } }) {
                     )}
                   </td>
                   <td className="py-4 px-6">
-                    <span className={`px-3 py-1 rounded-full text-xs font-medium ${getStatusColor(submission.status)}`}>
+                    <span
+                      className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium whitespace-nowrap ${getStatusColor(
+                        submission.status
+                      )}`}
+                    >
                       {getStatusText(submission.status)}
                     </span>
                   </td>

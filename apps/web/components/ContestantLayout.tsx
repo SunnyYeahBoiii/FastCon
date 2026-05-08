@@ -12,6 +12,14 @@ const navItems = [
   { name: "Submit", href: "/submit", icon: Upload },
 ];
 
+function isNavItemActive(pathname: string, href: string): boolean {
+  if (href === "/") {
+    return pathname === "/" || pathname.startsWith("/contests");
+  }
+
+  return pathname === href || pathname.startsWith(`${href}/`);
+}
+
 interface ContestantLayoutProps {
   user: { id: string; name: string; username: string; role: string } | null;
   children: ReactNode;
@@ -43,7 +51,7 @@ export default function ContestantLayout({
           {/* Centered Nav - Desktop */}
           <nav className="hidden md:flex items-center justify-center gap-1 flex-shrink-0">
             {navItems.map((item) => {
-              const isActive = pathname === item.href;
+              const isActive = isNavItemActive(pathname, item.href);
               return (
                 <Link
                   key={item.name}
@@ -102,7 +110,7 @@ export default function ContestantLayout({
       <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-surface/80 backdrop-blur-xl border-t border-outline-variant/20">
         <div className="flex items-center justify-around h-16">
           {navItems.map((item) => {
-            const isActive = pathname === item.href;
+            const isActive = isNavItemActive(pathname, item.href);
             return (
               <Link
                 key={item.name}
