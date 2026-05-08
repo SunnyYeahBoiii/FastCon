@@ -218,7 +218,7 @@ set -a
 source "$API_DIR/.env.local"
 set +a
 cd "$API_DIR"
-"${PYTHON_BIN:-$VENV_DIR/bin/python3}" -m uvicorn backend.main:app --host 127.0.0.1 --port 8010 &
+"${PYTHON_BIN:-$VENV_DIR/bin/python3}" -m uvicorn backend.main:app --host "${API_HOST:-0.0.0.0}" --port 8010 &
 API_PID=$!
 cd "$ROOT_DIR"
 wait_for_http "FastAPI" "http://127.0.0.1:8010/docs" "$API_PID" 30
