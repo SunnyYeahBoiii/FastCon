@@ -2,6 +2,7 @@ import { getSessionUser } from "@/lib/session";
 import { prisma } from "@/lib/db";
 import { redirect } from "next/navigation";
 import Link from "next/link";
+import ChangePasswordForm from "./ChangePasswordForm";
 
 const statusColors: Record<string, string> = {
   uploaded: "bg-surface-container-highest text-on-surface-variant",
@@ -75,6 +76,10 @@ export default async function ProfilePage() {
             <div className="text-sm text-on-surface-variant">Điểm trung bình</div>
           </div>
         </div>
+      </div>
+
+      <div className="mb-8">
+        <ChangePasswordForm />
       </div>
 
       {/* Submissions Table */}
