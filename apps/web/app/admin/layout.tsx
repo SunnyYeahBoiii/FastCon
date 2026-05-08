@@ -48,7 +48,7 @@ export default function AdminLayout({
   const sidebarWidth = collapsed ? SIDEBAR_COLLAPSED : SIDEBAR_EXPANDED;
 
   const handleLogout = async () => {
-    await fetch("/api/logout", { method: "POST" });
+    await fetch("/cs116.khtn/api/logout", { method: "POST" });
     router.push("/login");
   };
 

@@ -26,7 +26,7 @@ export default function GroundTruthSection({
       const formData = new FormData();
       formData.append("file", file);
 
-      const response = await fetch(`/api/contests/${contestId}/ground-truth`, {
+      const response = await fetch(`/cs116.khtn/api/contests/${contestId}/ground-truth`, {
         method: "POST",
         body: formData,
       });

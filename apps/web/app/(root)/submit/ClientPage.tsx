@@ -56,7 +56,7 @@ export default function SubmitPage() {
   }, []);
 
   useEffect(() => {
-    fetch("/api/public/contests")
+    fetch("/cs116.khtn/api/public/contests")
       .then(async (res) => {
         const data = await readJsonResponse<{ contests?: Contest[] }>(res);
         setContests(data?.contests || []);
@@ -65,7 +65,7 @@ export default function SubmitPage() {
   }, []);
 
   const fetchMySubmissions = useCallback(() => {
-    fetch("/api/submissions/user")
+    fetch("/cs116.khtn/api/submissions/user")
       .then(async (res) => {
         const data = await readJsonResponse<{ submissions?: Submission[] }>(res);
         setMySubmissions(data?.submissions || []);
@@ -78,7 +78,7 @@ export default function SubmitPage() {
     setQuotaError(null);
     try {
       const response = await fetch(
-        `/api/submissions/quota?contestId=${encodeURIComponent(contestId)}`
+        `/cs116.khtn/api/submissions/quota?contestId=${encodeURIComponent(contestId)}`
       );
       const data = await readJsonResponse<{ error?: string; quota?: SubmissionQuota }>(response);
 
@@ -134,7 +134,7 @@ export default function SubmitPage() {
   }, [selectedContest, selectedContestQuota?.resetAt, fetchQuota]);
 
   useEffect(() => {
-    const eventSource = new EventSource("/api/submissions/stream");
+    const eventSource = new EventSource("/cs116.khtn/api/submissions/stream");
 
     eventSource.addEventListener("initial", (event) => {
       const data = JSON.parse(event.data);
@@ -222,7 +222,7 @@ export default function SubmitPage() {
       formData.append("file", selectedFile);
       formData.append("contestId", selectedContest);
 
-      const response = await fetch("/api/submissions", {
+      const response = await fetch("/cs116.khtn/api/submissions", {
         method: "POST",
         body: formData,
       });

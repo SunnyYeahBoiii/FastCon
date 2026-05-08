@@ -29,7 +29,7 @@ export default function LeaderboardPage() {
 
   // Fetch contests list
   useEffect(() => {
-    fetch("/api/public/contests")
+    fetch("/cs116.khtn/api/public/contests")
       .then((r) => r.json())
       .then((data) => setContests(data.contests || []))
       .catch(console.error);
@@ -40,7 +40,7 @@ export default function LeaderboardPage() {
   // Fetch initial data
   useEffect(() => {
     setLoading(true);
-    fetch(`/api/leaderboard${queryParams}`)
+    fetch(`/cs116.khtn/api/leaderboard${queryParams}`)
       .then((r) => r.json())
       .then((data) => {
         setLeaderboard(data.leaderboard);
@@ -51,7 +51,7 @@ export default function LeaderboardPage() {
 
   // SSE connection for real-time updates
   useEffect(() => {
-    const eventSource = new EventSource(`/api/leaderboard/stream${queryParams}`);
+    const eventSource = new EventSource(`/cs116.khtn/api/leaderboard/stream${queryParams}`);
 
     eventSource.onmessage = (event) => {
       const data = JSON.parse(event.data);

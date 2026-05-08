@@ -33,7 +33,7 @@ export default function EditForm({ contest }: { contest: Contest }) {
   const handleSave = async () => {
     setSaving(true);
     try {
-      const response = await fetch(`/api/contests/${contest.id}`, {
+      const response = await fetch(`/cs116.khtn/api/contests/${contest.id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(formData),

@@ -89,7 +89,7 @@ export default function UserDetailPage({ params }: { params: { id: string } }) {
   useEffect(() => {
     const fetchUser = async () => {
       try {
-        const res = await fetch(`/api/users/${userId}`);
+        const res = await fetch(`/cs116.khtn/api/users/${userId}`);
         const data = await res.json();
         setUser(data.user);
       } catch (error) {
@@ -119,7 +119,7 @@ export default function UserDetailPage({ params }: { params: { id: string } }) {
     setIsUpdatingPassword(true);
 
     try {
-      const res = await fetch(`/api/users/${userId}/password`, {
+      const res = await fetch(`/cs116.khtn/api/users/${userId}/password`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ newPassword }),

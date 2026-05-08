@@ -107,8 +107,8 @@ export default function SubmissionsPage() {
   const fetchData = useCallback(async () => {
     try {
       const [subRes, usersRes] = await Promise.all([
-        fetch("/api/submissions"),
-        fetch("/api/users"),
+        fetch("/cs116.khtn/api/submissions"),
+        fetch("/cs116.khtn/api/users"),
       ]);
       const subData = await subRes.json();
       const usersData = await usersRes.json();
@@ -123,7 +123,7 @@ export default function SubmissionsPage() {
   useEffect(() => { fetchData(); }, [fetchData]);
 
   const handleViewDetail = async (id: string) => {
-    const res = await fetch(`/api/submissions/${id}`);
+    const res = await fetch(`/cs116.khtn/api/submissions/${id}`);
     const data = await res.json();
     if (data.ok) setDetail(data.submission);
   };
@@ -131,7 +131,7 @@ export default function SubmissionsPage() {
   const handleRerun = async (id: string) => {
     setRerunning(id);
     try {
-      const res = await fetch(`/api/submissions/${id}/rerun`, { method: "POST" });
+      const res = await fetch(`/cs116.khtn/api/submissions/${id}/rerun`, { method: "POST" });
       const data = await res.json();
       if (data.ok) {
         fetchData();

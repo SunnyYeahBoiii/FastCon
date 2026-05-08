@@ -24,7 +24,7 @@ export default function EvaluateCodeSection({
   const handleSave = async () => {
     setSaving(true);
     try {
-      const res = await fetch(`/api/contests/${contestId}/evaluate-code`, {
+      const res = await fetch(`/cs116.khtn/api/contests/${contestId}/evaluate-code`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ evaluateCode: code }),

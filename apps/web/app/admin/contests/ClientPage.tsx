@@ -48,7 +48,7 @@ export default function ContestsPage() {
 
   const fetchContests = async () => {
     try {
-      const response = await fetch("/api/contests");
+      const response = await fetch("/cs116.khtn/api/contests");
       const data = await response.json();
       if (data.ok) {
         setContests(data.contests);
@@ -72,7 +72,7 @@ export default function ContestsPage() {
 
     setSubmitting(true);
     try {
-      const response = await fetch("/api/contests", {
+      const response = await fetch("/cs116.khtn/api/contests", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(formData),
@@ -84,7 +84,7 @@ export default function ContestsPage() {
         if (groundTruthFile && data.contest.id) {
           const gtFormData = new FormData();
           gtFormData.append("file", groundTruthFile);
-          await fetch(`/api/contests/${data.contest.id}/ground-truth`, {
+          await fetch(`/cs116.khtn/api/contests/${data.contest.id}/ground-truth`, {
             method: "POST",
             body: gtFormData,
           });
@@ -116,7 +116,7 @@ export default function ContestsPage() {
     }
 
     try {
-      const response = await fetch(`/api/contests/${id}`, {
+      const response = await fetch(`/cs116.khtn/api/contests/${id}`, {
         method: "DELETE",
       });
 

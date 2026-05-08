@@ -51,7 +51,7 @@ export default function UsersPage() {
   const fetchUsers = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch("/api/users");
+      const res = await fetch("/cs116.khtn/api/users");
       const data = await res.json();
       setUsers(data.users || []);
     } catch (error) {
@@ -76,7 +76,7 @@ export default function UsersPage() {
     setIsSubmitting(true);
 
     try {
-      const res = await fetch("/api/users", {
+      const res = await fetch("/cs116.khtn/api/users", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(createForm),
@@ -164,7 +164,7 @@ export default function UsersPage() {
     const errors: string[] = [];
 
     for (const user of validation.users!) {
-      const res = await fetch("/api/users", {
+      const res = await fetch("/cs116.khtn/api/users", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -205,7 +205,7 @@ export default function UsersPage() {
     setIsSubmitting(true);
 
     try {
-      const res = await fetch(`/api/users/${userToDelete.id}`, {
+      const res = await fetch(`/cs116.khtn/api/users/${userToDelete.id}`, {
         method: "DELETE",
       });
 
