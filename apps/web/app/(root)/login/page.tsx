@@ -1,10 +1,12 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 
 export default function LoginPage() {
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const router = useRouter();
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -16,7 +18,7 @@ export default function LoginPage() {
     const password = formData.get("password") as string;
 
     try {
-      const res = await fetch("/api/login", {
+      const res = await fetch("api/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ username, password }),
@@ -29,8 +31,8 @@ export default function LoginPage() {
         return;
       }
 
-      // Redirect based on role
-      window.location.href = data.user.role === "admin" ? "/admin/contests" : "/";
+      // Use Next router so basePath is applied in production deployments.
+      router.replace(data.user.role === "admin" ? "/admin/contests" : "/");
     } catch {
       setError("Lỗi kết nối");
     } finally {
