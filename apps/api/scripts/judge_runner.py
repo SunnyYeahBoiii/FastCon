@@ -77,47 +77,27 @@ def update_submission(submission_id: str, status: str, score=None, metrics=None)
 
 
 def run_custom_evaluate(code: str, submission_path: str, answer_path: str):
-    """Execute custom evaluate function with restricted globals."""
-    import builtins
-
-    ALLOWED_MODULES = {
-        "pickle", "numpy", "pandas", "math", "collections", "itertools",
-        "functools", "statistics", "decimal", "fractions", "operator",
-        "string", "re", "json", "time", "datetime", "copy",
-    }
-
-    def safe_import(name, globals=None, locals=None, fromlist=(), level=0):
-        if name not in ALLOWED_MODULES and not name.startswith(("numpy.", "pandas.", "collections.", "itertools.", "functools.")):
-            raise ImportError(f"Module '{name}' is not allowed in evaluate function")
-        return builtins.__import__(name, globals, locals, fromlist, level)
-
-    safe_builtins = dict(builtins.__dict__)
-    safe_builtins.pop("eval", None)
-    safe_builtins.pop("exec", None)
-    safe_builtins.pop("compile", None)
-    safe_builtins.pop("input", None)
-    safe_builtins.pop("breakpoint", None)
-    safe_builtins.pop("help", None)
-    safe_builtins["__import__"] = safe_import
-
-    safe_globals = {"__builtins__": safe_builtins, "pickle": pickle}
+    """Execute admin-defined evaluate function with full Python builtins."""
+    global_ns: dict = {"pickle": pickle}
 
     try:
         import numpy as np
-        safe_globals["np"] = np
-        safe_globals["numpy"] = np
+
+        global_ns["np"] = np
+        global_ns["numpy"] = np
     except ImportError:
         pass
 
     try:
         import pandas as pd
-        safe_globals["pd"] = pd
-        safe_globals["pandas"] = pd
+
+        global_ns["pd"] = pd
+        global_ns["pandas"] = pd
     except ImportError:
         pass
 
-    local_ns = {}
-    exec(code, safe_globals, local_ns)
+    local_ns: dict = {}
+    exec(code, global_ns, local_ns)
 
     if "evaluate" not in local_ns:
         raise ValueError("evaluate function not defined")
