@@ -20,18 +20,35 @@ export default function EvaluateCodeSection({
   );
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
 
   const handleSave = async () => {
     setSaving(true);
+    setNotice(null);
     try {
       const res = await fetch(`/cs116.khtn/api/contests/${contestId}/evaluate-code`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ evaluateCode: code }),
       });
-      const data = await res.json();
+      const data = await res.json() as {
+        ok?: boolean;
+        error?: string;
+        evaluateCodeChanged?: boolean;
+        requeuedCount?: number;
+      };
       if (data.ok) {
+        const requeuedCount = data.requeuedCount ?? 0;
         setSaved(true);
+        if (data.evaluateCodeChanged) {
+          setNotice(
+            requeuedCount > 0
+              ? `Saved. ${requeuedCount} submissions queued for rejudge.`
+              : "Saved. No completed submissions to rejudge."
+          );
+        } else {
+          setNotice("Saved. Evaluate code unchanged; no submissions requeued.");
+        }
         router.refresh();
         setTimeout(() => setSaved(false), 2000);
       } else {
@@ -64,6 +81,12 @@ export default function EvaluateCodeSection({
       >
         {saved ? "Saved!" : saving ? "Saving..." : "Save Evaluate Code"}
       </button>
+
+      {notice && (
+        <p className="mt-3 text-sm font-medium text-on-surface-variant">
+          {notice}
+        </p>
+      )}
     </div>
   );
 }

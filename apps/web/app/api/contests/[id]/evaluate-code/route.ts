@@ -1,5 +1,9 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
+import {
+  REJUDGE_ELIGIBLE_STATUSES,
+  hasEvaluateCodeChanged,
+} from "@/lib/evaluateCodeRejudge";
 import { requireAdminApi } from "@/lib/guard";
 
 export async function GET(
@@ -35,16 +39,72 @@ export async function PUT(
   const guard = await requireAdminApi();
   if (guard instanceof Response) return guard;
 
-  const { id } = params;
-  const body = await request.json();
-  const { evaluateCode } = body;
+  try {
+    const { id } = params;
+    const body = await request.json();
+    const { evaluateCode } = body as { evaluateCode?: string | null };
+    const nextEvaluateCode = evaluateCode ?? null;
 
-  const contest = await prisma.contest.update({
-    where: { id },
-    data: {
-      evaluateCode: evaluateCode ?? null,
-    },
-  });
+    const contest = await prisma.contest.findUnique({
+      where: { id },
+      select: { id: true, evaluateCode: true },
+    });
 
-  return NextResponse.json({ ok: true, contest });
+    if (!contest) {
+      return NextResponse.json(
+        { ok: false, error: "Contest not found" },
+        { status: 404 }
+      );
+    }
+
+    const evaluateCodeChanged = hasEvaluateCodeChanged(
+      contest.evaluateCode,
+      nextEvaluateCode
+    );
+
+    if (!evaluateCodeChanged) {
+      const updatedContest = await prisma.contest.update({
+        where: { id },
+        data: { evaluateCode: nextEvaluateCode },
+      });
+
+      return NextResponse.json({
+        ok: true,
+        contest: updatedContest,
+        evaluateCodeChanged,
+        requeuedCount: 0,
+      });
+    }
+
+    const [updatedContest, requeued] = await prisma.$transaction([
+      prisma.contest.update({
+        where: { id },
+        data: { evaluateCode: nextEvaluateCode },
+      }),
+      prisma.submission.updateMany({
+        where: {
+          contestId: id,
+          status: { in: [...REJUDGE_ELIGIBLE_STATUSES] },
+        },
+        data: {
+          status: "queued",
+          score: null,
+          metrics: null,
+        },
+      }),
+    ]);
+
+    return NextResponse.json({
+      ok: true,
+      contest: updatedContest,
+      evaluateCodeChanged,
+      requeuedCount: requeued.count,
+    });
+  } catch (error) {
+    console.error("Update evaluate code error:", error);
+    return NextResponse.json(
+      { ok: false, error: "Internal server error" },
+      { status: 500 }
+    );
+  }
 }
