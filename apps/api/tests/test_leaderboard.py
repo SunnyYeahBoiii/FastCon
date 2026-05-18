@@ -10,7 +10,7 @@ from backend.schemas import build_leaderboard, get_points_from_rank
 
 
 class BuildLeaderboardTests(unittest.TestCase):
-    def test_keeps_best_score_per_user_per_contest(self) -> None:
+    def test_preserves_repository_score_per_user_per_contest(self) -> None:
         rows = [
             {
                 "userId": "u1",
@@ -110,7 +110,8 @@ class FetchLeaderboardRowsTests(unittest.IsolatedAsyncioTestCase):
                   "userId" TEXT NOT NULL,
                   "contestId" TEXT NOT NULL,
                   "status" TEXT NOT NULL,
-                  "score" REAL
+                  "score" REAL,
+                  "createdAt" TEXT NOT NULL
                 );
                 '''
             )
@@ -130,7 +131,7 @@ class FetchLeaderboardRowsTests(unittest.IsolatedAsyncioTestCase):
         repositories.get_sqlite_path = self.original_get_sqlite_path
         self.temp_dir.cleanup()
 
-    async def test_counts_only_graded_submissions(self) -> None:
+    async def test_uses_latest_graded_submission_score(self) -> None:
         connection = sqlite3.connect(self.db_path)
         try:
             connection.executemany(
@@ -140,14 +141,14 @@ class FetchLeaderboardRowsTests(unittest.IsolatedAsyncioTestCase):
                   "userId",
                   "contestId",
                   "status",
-                  "score"
+                  "score",
+                  "createdAt"
                 )
-                VALUES (?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?)
                 ''',
                 [
-                    ("s1", "u1", "c1", "graded", 90.0),
-                    ("s2", "u1", "c1", "failed", None),
-                    ("s3", "u1", "c1", "graded", 95.0),
+                    ("s1", "u1", "c1", "graded", 95.0, "2026-01-01T00:00:00+00:00"),
+                    ("s2", "u1", "c1", "graded", 80.0, "2026-01-02T00:00:00+00:00"),
                 ],
             )
             connection.commit()
@@ -157,8 +158,38 @@ class FetchLeaderboardRowsTests(unittest.IsolatedAsyncioTestCase):
         rows = await repositories.fetch_leaderboard_rows("c1")
 
         self.assertEqual(len(rows), 1)
-        self.assertEqual(rows[0]["score"], 95.0)
+        self.assertEqual(rows[0]["score"], 80.0)
         self.assertEqual(rows[0]["submissionCount"], 2)
+
+    async def test_ignores_newer_failed_submission_for_latest_score(self) -> None:
+        connection = sqlite3.connect(self.db_path)
+        try:
+            connection.executemany(
+                '''
+                INSERT INTO "Submission" (
+                  "id",
+                  "userId",
+                  "contestId",
+                  "status",
+                  "score",
+                  "createdAt"
+                )
+                VALUES (?, ?, ?, ?, ?, ?)
+                ''',
+                [
+                    ("s1", "u1", "c1", "graded", 90.0, "2026-01-01T00:00:00+00:00"),
+                    ("s2", "u1", "c1", "failed", None, "2026-01-02T00:00:00+00:00"),
+                ],
+            )
+            connection.commit()
+        finally:
+            connection.close()
+
+        rows = await repositories.fetch_leaderboard_rows("c1")
+
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["score"], 90.0)
+        self.assertEqual(rows[0]["submissionCount"], 1)
 
 
 if __name__ == "__main__":

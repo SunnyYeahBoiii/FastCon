@@ -102,30 +102,19 @@ def get_points_from_rank(rank: int) -> int:
 
 
 def build_leaderboard(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """Rank leaderboard entries (one row per user per contest from SQL aggregation)."""
-    aggregated: dict[tuple[str, str], dict[str, Any]] = {}
-
-    for row in rows:
-        key = (row["userId"], row["contestId"])
-        score = float(row["score"])
-        submission_count = int(row.get("submissionCount") or 0)
-        existing = aggregated.get(key)
-        if existing is None:
-            aggregated[key] = {
-                "userId": row["userId"],
-                "userName": row["userName"],
-                "contestId": row["contestId"],
-                "contestTitle": row["contestTitle"],
-                "score": score,
-                "submissionCount": submission_count,
-            }
-            continue
-
-        existing["submissionCount"] = max(existing["submissionCount"], submission_count)
-        if score > existing["score"]:
-            existing["score"] = score
-
-    ranked = sorted(aggregated.values(), key=lambda entry: entry["score"], reverse=True)
+    """Rank canonical leaderboard entries returned by the repository."""
+    entries = [
+        {
+            "userId": row["userId"],
+            "userName": row["userName"],
+            "contestId": row["contestId"],
+            "contestTitle": row["contestTitle"],
+            "score": float(row["score"]),
+            "submissionCount": int(row.get("submissionCount") or 0),
+        }
+        for row in rows
+    ]
+    ranked = sorted(entries, key=lambda entry: entry["score"], reverse=True)
 
     return [
         {

@@ -61,17 +61,24 @@ def get_contest_info(contest_id: str):
 
 def update_submission(submission_id: str, status: str, score=None, metrics=None):
     conn = get_db_connection()
-    if score is not None:
-        metrics_json = json.dumps(metrics) if metrics else None
-        conn.execute(
-            "UPDATE Submission SET status = ?, score = ?, metrics = ? WHERE id = ?",
-            (status, round(score, 2), metrics_json, submission_id)
-        )
-    else:
-        conn.execute(
-            "UPDATE Submission SET status = ?, metrics = ? WHERE id = ?",
-            (status, json.dumps(metrics) if metrics else None, submission_id)
-        )
+    rounded_score = round(score, 2) if score is not None else None
+    metrics_json = json.dumps(metrics) if metrics else None
+    conn.execute(
+        """
+        UPDATE Submission
+        SET
+          status = ?,
+          score = ?,
+          metrics = ?,
+          quotaUsageState = CASE
+            WHEN quotaUsageState = 'pending' AND ? = 'graded' AND ? IS NOT NULL THEN 'counted'
+            WHEN quotaUsageState = 'pending' AND ? = 'failed' THEN 'refunded'
+            ELSE quotaUsageState
+          END
+        WHERE id = ?
+        """,
+        (status, rounded_score, metrics_json, status, rounded_score, status, submission_id),
+    )
     conn.commit()
     conn.close()
 

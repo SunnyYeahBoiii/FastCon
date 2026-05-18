@@ -13,6 +13,9 @@ import aiosqlite
 from .config import get_sqlite_path
 
 QUOTA_WINDOW_DURATION = timedelta(hours=24)
+QUOTA_USAGE_PENDING = "pending"
+QUOTA_USAGE_COUNTED = "counted"
+QUOTA_USAGE_REFUNDED = "refunded"
 _runtime_schema_path: Path | None = None
 _runtime_schema_lock = asyncio.Lock()
 
@@ -143,6 +146,55 @@ def _build_quota_snapshot(
     }
 
 
+async def _ensure_submission_quota_usage_state_column(
+    connection: aiosqlite.Connection,
+) -> None:
+    cursor = await connection.execute('PRAGMA table_info("Submission")')
+    columns = {row["name"] for row in await cursor.fetchall()}
+    if "quotaUsageState" in columns:
+        return
+
+    await connection.execute(
+        'ALTER TABLE "Submission" ADD COLUMN "quotaUsageState" TEXT NOT NULL DEFAULT \'pending\''
+    )
+    await connection.execute(
+        '''
+        UPDATE "Submission"
+        SET "quotaUsageState" = CASE
+          WHEN "status" = 'graded' AND "score" IS NOT NULL THEN 'counted'
+          WHEN "status" = 'failed' THEN 'refunded'
+          ELSE 'pending'
+        END
+        '''
+    )
+
+
+async def _count_active_quota_usage(
+    connection: aiosqlite.Connection,
+    *,
+    user_id: str,
+    contest_id: str,
+    window_started_at: Any,
+) -> int:
+    started_at = _coerce_datetime(window_started_at)
+    if started_at is None:
+        return 0
+
+    cursor = await connection.execute(
+        '''
+        SELECT COUNT(*) AS "used"
+        FROM "Submission"
+        WHERE "userId" = ?
+          AND "contestId" = ?
+          AND "quotaUsageState" IN ('pending', 'counted')
+          AND datetime("createdAt") >= datetime(?)
+        ''',
+        (user_id, contest_id, started_at.isoformat()),
+    )
+    row = await cursor.fetchone()
+    return int(row["used"] if row else 0)
+
+
 @asynccontextmanager
 async def open_connection() -> AsyncIterator[aiosqlite.Connection]:
     connection = await aiosqlite.connect(get_sqlite_path(), timeout=30)
@@ -154,6 +206,7 @@ async def open_connection() -> AsyncIterator[aiosqlite.Connection]:
 
 
 async def ensure_submission_quota_schema(connection: aiosqlite.Connection) -> None:
+    await _ensure_submission_quota_usage_state_column(connection)
     await connection.execute(
         '''
         CREATE TABLE IF NOT EXISTS "SubmissionQuotaWindow" (
@@ -325,13 +378,19 @@ async def fetch_submission_quota(user_id: str, contest_id: str) -> dict[str, Any
             (user_id, contest_id),
         )
         quota_row = _row_to_dict(await cursor.fetchone())
+        quota_usage_count = await _count_active_quota_usage(
+            connection,
+            user_id=user_id,
+            contest_id=contest_id,
+            window_started_at=quota_row["windowStartedAt"] if quota_row else None,
+        )
 
     return _build_quota_snapshot(
         contest_id=contest_id,
         daily_submission_limit=contest["dailySubmissionLimit"],
         contest_deadline=contest["deadline"],
         window_started_at=quota_row["windowStartedAt"] if quota_row else None,
-        submission_count=quota_row["submissionCount"] if quota_row else 0,
+        submission_count=quota_usage_count,
     )
 
 
@@ -408,13 +467,19 @@ async def create_submission_with_quota(
                 (user_id, contest_id),
             )
             quota_row = _row_to_dict(await quota_cursor.fetchone())
+            quota_usage_count = await _count_active_quota_usage(
+                connection,
+                user_id=user_id,
+                contest_id=contest_id,
+                window_started_at=quota_row["windowStartedAt"] if quota_row else None,
+            )
 
             current_quota = _build_quota_snapshot(
                 contest_id=contest_id,
                 daily_submission_limit=limit,
                 contest_deadline=contest["deadline"],
                 window_started_at=quota_row["windowStartedAt"] if quota_row else None,
-                submission_count=quota_row["submissionCount"] if quota_row else 0,
+                submission_count=quota_usage_count,
                 now=now,
             )
             if current_quota["isQuotaExceeded"]:
@@ -466,7 +531,7 @@ async def create_submission_with_quota(
                     now=now,
                 )
             else:
-                new_submission_count = int(quota_row["submissionCount"]) + 1
+                new_submission_count = quota_usage_count + 1
                 await connection.execute(
                     '''
                     UPDATE "SubmissionQuotaWindow"
@@ -501,9 +566,10 @@ async def create_submission_with_quota(
               "contestId",
               "filename",
               "filepath",
-              "status"
+              "status",
+              "quotaUsageState"
             )
-            VALUES (?, ?, ?, ?, ?, 'queued')
+            VALUES (?, ?, ?, ?, ?, 'queued', 'pending')
             ''',
             (submission_id, user_id, contest_id, filename, filepath),
         )
@@ -582,14 +648,23 @@ async def update_submission_result(
     score: float | None,
     metrics: str | None,
 ) -> None:
+    await ensure_runtime_schema()
     async with open_connection() as connection:
         await connection.execute(
             '''
             UPDATE "Submission"
-            SET "status" = ?, "score" = ?, "metrics" = ?
+            SET
+              "status" = ?,
+              "score" = ?,
+              "metrics" = ?,
+              "quotaUsageState" = CASE
+                WHEN "quotaUsageState" = 'pending' AND ? = 'graded' AND ? IS NOT NULL THEN 'counted'
+                WHEN "quotaUsageState" = 'pending' AND ? = 'failed' THEN 'refunded'
+                ELSE "quotaUsageState"
+              END
             WHERE "id" = ?
             ''',
-            (status, score, metrics, submission_id),
+            (status, score, metrics, status, score, status, submission_id),
         )
         await connection.commit()
 
@@ -604,14 +679,14 @@ async def fail_submission_with_error(submission_id: str, message: str) -> None:
 
 
 async def fetch_leaderboard_rows(contest_id: str | None) -> list[dict[str, Any]]:
-    """Best graded score per user/contest plus graded submission count for that contest only."""
+    """Latest graded score per user/contest plus graded submission count for that contest only."""
     query = '''
         SELECT
           s."userId",
           u."name" AS "userName",
           s."contestId",
           c."title" AS "contestTitle",
-          MAX(s."score") AS "score",
+          s."score" AS "score",
           (
             SELECT COUNT(*)
             FROM "Submission" sc
@@ -624,6 +699,21 @@ async def fetch_leaderboard_rows(contest_id: str | None) -> list[dict[str, Any]]
         JOIN "User" u ON u."id" = s."userId"
         JOIN "Contest" c ON c."id" = s."contestId"
         WHERE s."status" = 'graded' AND s."score" IS NOT NULL
+          AND NOT EXISTS (
+            SELECT 1
+            FROM "Submission" newer
+            WHERE newer."userId" = s."userId"
+              AND newer."contestId" = s."contestId"
+              AND newer."status" = 'graded'
+              AND newer."score" IS NOT NULL
+              AND (
+                newer."createdAt" > s."createdAt"
+                OR (
+                  newer."createdAt" = s."createdAt"
+                  AND newer."id" > s."id"
+                )
+              )
+          )
     '''
     params: tuple[Any, ...] = ()
     if contest_id:
@@ -631,8 +721,7 @@ async def fetch_leaderboard_rows(contest_id: str | None) -> list[dict[str, Any]]
         params = (contest_id,)
 
     query += '''
-        GROUP BY s."userId", s."contestId", u."name", c."title"
-        ORDER BY MAX(s."score") DESC
+        ORDER BY s."score" DESC
     '''
 
     async with open_connection() as connection:

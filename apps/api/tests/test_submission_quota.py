@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import sqlite3
+import tempfile
 import unittest
 from contextlib import asynccontextmanager
 from datetime import datetime, timedelta, timezone
@@ -94,6 +96,288 @@ class SubmissionQuotaSnapshotTests(unittest.TestCase):
         self.assertIsNone(snapshot["windowStartedAt"])
         self.assertIsNone(snapshot["resetAt"])
         self.assertFalse(snapshot["isQuotaExceeded"])
+
+
+class SubmissionQuotaRepositoryTests(unittest.IsolatedAsyncioTestCase):
+    async def asyncSetUp(self) -> None:
+        self.temp_dir = tempfile.TemporaryDirectory()
+        self.db_path = Path(self.temp_dir.name) / "quota.db"
+        self.original_runtime_schema_path = repositories._runtime_schema_path
+        self.original_get_sqlite_path = repositories.get_sqlite_path
+        repositories._runtime_schema_path = None
+        repositories.get_sqlite_path = lambda: self.db_path
+
+        connection = sqlite3.connect(self.db_path)
+        try:
+            connection.executescript(
+                '''
+                CREATE TABLE "User" (
+                  "id" TEXT NOT NULL PRIMARY KEY,
+                  "username" TEXT NOT NULL,
+                  "passwordHash" TEXT NOT NULL,
+                  "name" TEXT NOT NULL,
+                  "role" TEXT NOT NULL DEFAULT 'contestant',
+                  "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+                );
+
+                CREATE TABLE "Contest" (
+                  "id" TEXT NOT NULL PRIMARY KEY,
+                  "title" TEXT NOT NULL,
+                  "description" TEXT,
+                  "groundTruthPath" TEXT,
+                  "evaluateCode" TEXT,
+                  "deadline" DATETIME,
+                  "status" TEXT NOT NULL DEFAULT 'ongoing',
+                  "dailySubmissionLimit" INTEGER,
+                  "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+                );
+
+                CREATE TABLE "Submission" (
+                  "id" TEXT NOT NULL PRIMARY KEY,
+                  "userId" TEXT NOT NULL,
+                  "contestId" TEXT NOT NULL,
+                  "filename" TEXT NOT NULL,
+                  "filepath" TEXT NOT NULL,
+                  "status" TEXT NOT NULL DEFAULT 'uploaded',
+                  "score" REAL,
+                  "metrics" TEXT,
+                  "quotaUsageState" TEXT NOT NULL DEFAULT 'pending',
+                  "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+                );
+
+                CREATE TABLE "SubmissionQuotaWindow" (
+                  "id" TEXT NOT NULL PRIMARY KEY,
+                  "userId" TEXT NOT NULL,
+                  "contestId" TEXT NOT NULL,
+                  "windowStartedAt" DATETIME NOT NULL,
+                  "submissionCount" INTEGER NOT NULL DEFAULT 0,
+                  "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                  "updatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+                );
+
+                CREATE UNIQUE INDEX "SubmissionQuotaWindow_userId_contestId_key"
+                ON "SubmissionQuotaWindow" ("userId", "contestId");
+                '''
+            )
+            connection.execute(
+                '''
+                INSERT INTO "User" ("id", "username", "passwordHash", "name", "role")
+                VALUES ('u1', 'alice', 'hash', 'Alice', 'contestant')
+                '''
+            )
+            connection.execute(
+                '''
+                INSERT INTO "Contest" ("id", "title", "status", "dailySubmissionLimit")
+                VALUES ('c1', 'Task 1', 'ongoing', 3)
+                '''
+            )
+            connection.commit()
+        finally:
+            connection.close()
+
+    async def asyncTearDown(self) -> None:
+        repositories._runtime_schema_path = self.original_runtime_schema_path
+        repositories.get_sqlite_path = self.original_get_sqlite_path
+        self.temp_dir.cleanup()
+
+    def _insert_quota_window(self, *, count: int = 99) -> datetime:
+        started_at = datetime(2026, 5, 18, 1, 0, tzinfo=timezone.utc)
+        connection = sqlite3.connect(self.db_path)
+        try:
+            connection.execute(
+                '''
+                INSERT INTO "SubmissionQuotaWindow" (
+                  "id",
+                  "userId",
+                  "contestId",
+                  "windowStartedAt",
+                  "submissionCount"
+                )
+                VALUES ('q1', 'u1', 'c1', ?, ?)
+                ''',
+                (started_at.isoformat(), count),
+            )
+            connection.commit()
+        finally:
+            connection.close()
+        return started_at
+
+    def _insert_submission(
+        self,
+        submission_id: str,
+        *,
+        status: str,
+        quota_usage_state: str,
+        created_at: datetime,
+        score: float | None = None,
+    ) -> None:
+        connection = sqlite3.connect(self.db_path)
+        try:
+            connection.execute(
+                '''
+                INSERT INTO "Submission" (
+                  "id",
+                  "userId",
+                  "contestId",
+                  "filename",
+                  "filepath",
+                  "status",
+                  "score",
+                  "quotaUsageState",
+                  "createdAt"
+                )
+                VALUES (?, 'u1', 'c1', ?, ?, ?, ?, ?, ?)
+                ''',
+                (
+                    submission_id,
+                    f"{submission_id}.pkl",
+                    f"/tmp/{submission_id}.pkl",
+                    status,
+                    score,
+                    quota_usage_state,
+                    created_at.isoformat(),
+                ),
+            )
+            connection.commit()
+        finally:
+            connection.close()
+
+    def _quota_usage_state(self, submission_id: str) -> str:
+        connection = sqlite3.connect(self.db_path)
+        try:
+            row = connection.execute(
+                'SELECT "quotaUsageState" FROM "Submission" WHERE "id" = ?',
+                (submission_id,),
+            ).fetchone()
+        finally:
+            connection.close()
+        assert row is not None
+        return str(row[0])
+
+    async def test_quota_used_is_derived_from_active_pending_and_counted_submissions(self) -> None:
+        started_at = self._insert_quota_window()
+        self._insert_submission(
+            "s-pending",
+            status="queued",
+            quota_usage_state="pending",
+            created_at=started_at + timedelta(minutes=1),
+        )
+        self._insert_submission(
+            "s-counted",
+            status="graded",
+            quota_usage_state="counted",
+            created_at=started_at + timedelta(minutes=2),
+            score=90.0,
+        )
+        self._insert_submission(
+            "s-refunded",
+            status="failed",
+            quota_usage_state="refunded",
+            created_at=started_at + timedelta(minutes=3),
+        )
+        self._insert_submission(
+            "s-before-window",
+            status="graded",
+            quota_usage_state="counted",
+            created_at=started_at - timedelta(minutes=1),
+            score=50.0,
+        )
+
+        quota = await repositories.fetch_submission_quota("u1", "c1")
+
+        assert quota is not None
+        self.assertEqual(quota["used"], 2)
+        self.assertEqual(quota["remaining"], 1)
+
+    async def test_first_judge_result_settles_pending_quota_usage_once(self) -> None:
+        now = datetime(2026, 5, 18, 2, 0, tzinfo=timezone.utc)
+        self._insert_submission(
+            "s-failed",
+            status="running",
+            quota_usage_state="pending",
+            created_at=now,
+        )
+        self._insert_submission(
+            "s-graded",
+            status="running",
+            quota_usage_state="pending",
+            created_at=now,
+        )
+
+        await repositories.update_submission_result(
+            "s-failed",
+            status="failed",
+            score=None,
+            metrics="{}",
+        )
+        await repositories.requeue_submission("s-failed")
+        await repositories.update_submission_result(
+            "s-failed",
+            status="graded",
+            score=88.0,
+            metrics="{}",
+        )
+
+        await repositories.update_submission_result(
+            "s-graded",
+            status="graded",
+            score=90.0,
+            metrics="{}",
+        )
+        await repositories.requeue_submission("s-graded")
+        await repositories.update_submission_result(
+            "s-graded",
+            status="failed",
+            score=None,
+            metrics="{}",
+        )
+
+        self.assertEqual(self._quota_usage_state("s-failed"), "refunded")
+        self.assertEqual(self._quota_usage_state("s-graded"), "counted")
+
+    async def test_create_submission_with_quota_ignores_refunded_submissions(self) -> None:
+        connection = sqlite3.connect(self.db_path)
+        try:
+            connection.execute(
+                'UPDATE "Contest" SET "dailySubmissionLimit" = 2 WHERE "id" = ?',
+                ("c1",),
+            )
+            connection.commit()
+        finally:
+            connection.close()
+
+        started_at = self._insert_quota_window(count=2)
+        self._insert_submission(
+            "s-pending",
+            status="queued",
+            quota_usage_state="pending",
+            created_at=started_at + timedelta(minutes=1),
+        )
+        self._insert_submission(
+            "s-refunded",
+            status="failed",
+            quota_usage_state="refunded",
+            created_at=started_at + timedelta(minutes=2),
+        )
+
+        result = await repositories.create_submission_with_quota(
+            user_id="u1",
+            contest_id="c1",
+            filename="new.pkl",
+            filepath="/tmp/new.pkl",
+        )
+        next_result = await repositories.create_submission_with_quota(
+            user_id="u1",
+            contest_id="c1",
+            filename="blocked.pkl",
+            filepath="/tmp/blocked.pkl",
+        )
+
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["quota"]["used"], 2)
+        self.assertEqual(result["quota"]["remaining"], 0)
+        self.assertFalse(next_result["ok"])
+        self.assertEqual(next_result["reason"], "submission_limit_reached")
 
 
 class RuntimeSchemaEnsureTests(unittest.IsolatedAsyncioTestCase):
