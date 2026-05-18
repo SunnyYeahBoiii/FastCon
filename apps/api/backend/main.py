@@ -21,9 +21,100 @@ broadcaster = SubmissionBroadcaster()
 worker = SubmissionWorker(broadcaster)
 
 
+def _safe_submission_filename(raw_filename: str | None) -> str | None:
+    filename = Path(raw_filename or "").name
+    if not filename or not filename.endswith(".pkl"):
+        return None
+    return filename
+
+
+def _submission_storage_path(filename: str) -> tuple[str, Path]:
+    saved_filename = f"{time.time_ns()}_{filename}"
+    return saved_filename, get_submissions_root() / saved_filename
+
+
 def _write_upload_file(file: UploadFile, filepath: Path) -> None:
-    with filepath.open("wb") as destination:
-        shutil.copyfileobj(file.file, destination, length=1024 * 1024)
+    part_path = filepath.with_name(f"{filepath.name}.part")
+    try:
+        with part_path.open("wb") as destination:
+            shutil.copyfileobj(file.file, destination, length=1024 * 1024)
+        part_path.replace(filepath)
+    except Exception:
+        part_path.unlink(missing_ok=True)
+        filepath.unlink(missing_ok=True)
+        raise
+
+
+async def _stream_request_to_file(request: Request, filepath: Path) -> int:
+    part_path = filepath.with_name(f"{filepath.name}.part")
+    bytes_written = 0
+    destination = None
+    try:
+        await asyncio.to_thread(part_path.unlink, missing_ok=True)
+        await asyncio.to_thread(filepath.unlink, missing_ok=True)
+        destination = await asyncio.to_thread(part_path.open, "wb")
+        async for chunk in request.stream():
+            if not chunk:
+                continue
+            bytes_written += len(chunk)
+            await asyncio.to_thread(destination.write, chunk)
+        await asyncio.to_thread(destination.close)
+        destination = None
+        await asyncio.to_thread(part_path.replace, filepath)
+        return bytes_written
+    except Exception:
+        if destination is not None:
+            await asyncio.to_thread(destination.close)
+        await asyncio.to_thread(part_path.unlink, missing_ok=True)
+        await asyncio.to_thread(filepath.unlink, missing_ok=True)
+        raise
+
+
+def _submission_failure_response(submission_result: dict) -> JSONResponse:
+    if submission_result["reason"] == "contest_not_found":
+        return JSONResponse(
+            {"ok": False, "error": "Contest not found"},
+            status_code=status.HTTP_404_NOT_FOUND,
+        )
+
+    if submission_result["reason"] == "submission_limit_reached":
+        return JSONResponse(
+            {
+                "ok": False,
+                "code": "SUBMISSION_LIMIT_REACHED",
+                "error": "You have reached the submission limit for this contest",
+                "quota": schemas.quota_snapshot_payload(submission_result["quota"]),
+            },
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+        )
+
+    if submission_result["reason"] == "deadline_passed":
+        return JSONResponse(
+            {
+                "ok": False,
+                "code": "CONTEST_DEADLINE_PASSED",
+                "error": "Contest submission deadline has passed",
+                "quota": schemas.quota_snapshot_payload(submission_result["quota"]),
+            },
+            status_code=status.HTTP_400_BAD_REQUEST,
+        )
+
+    if submission_result["reason"] == "contest_closed":
+        return JSONResponse(
+            {
+                "ok": False,
+                "code": "CONTEST_CLOSED",
+                "error": "Contest is no longer accepting submissions",
+                "quota": schemas.quota_snapshot_payload(submission_result["quota"]),
+            },
+            status_code=status.HTTP_400_BAD_REQUEST,
+        )
+
+    return JSONResponse(
+        {"ok": False, "error": "Unable to create submission"},
+        status_code=status.HTTP_400_BAD_REQUEST,
+    )
+
 
 
 @asynccontextmanager
@@ -84,6 +175,118 @@ async def list_submissions(_admin_user: dict = Depends(get_admin_user)):
     return {"submissions": [schemas.admin_submission_payload(row) for row in submissions]}
 
 
+@app.post("/api/submissions/init")
+async def init_submission_upload(request: Request, current_user: dict = Depends(get_current_user)):
+    try:
+        payload = await request.json()
+    except json.JSONDecodeError:
+        return JSONResponse(
+            {"ok": False, "error": "Invalid JSON body"},
+            status_code=status.HTTP_400_BAD_REQUEST,
+        )
+
+    if not isinstance(payload, dict):
+        return JSONResponse(
+            {"ok": False, "error": "Invalid JSON body"},
+            status_code=status.HTTP_400_BAD_REQUEST,
+        )
+
+    contest_id = str(payload.get("contestId") or "")
+    filename = _safe_submission_filename(str(payload.get("filename") or ""))
+    if not filename:
+        return JSONResponse(
+            {"ok": False, "error": "File must be a .pkl file"},
+            status_code=status.HTTP_400_BAD_REQUEST,
+        )
+
+    saved_filename, filepath = _submission_storage_path(filename)
+    submission_result = await repositories.prepare_submission_upload_with_quota(
+        user_id=current_user["id"],
+        contest_id=contest_id,
+        filename=saved_filename,
+        filepath=str(filepath),
+    )
+    if not submission_result["ok"]:
+        return _submission_failure_response(submission_result)
+
+    return {
+        "ok": True,
+        "submissionId": submission_result["submissionId"],
+        "quota": schemas.quota_snapshot_payload(submission_result["quota"]),
+    }
+
+
+@app.put("/api/submissions/{submission_id}/file")
+async def upload_submission_file(
+    request: Request,
+    submission_id: str,
+    current_user: dict = Depends(get_current_user),
+):
+    user_id = current_user["id"]
+    pending_upload = await repositories.fetch_pending_submission_upload(
+        submission_id,
+        user_id=user_id,
+    )
+    if pending_upload is None:
+        return JSONResponse(
+            {"ok": False, "error": "Pending upload not found"},
+            status_code=status.HTTP_404_NOT_FOUND,
+        )
+
+    filepath = Path(pending_upload["filepath"])
+    await asyncio.to_thread(filepath.parent.mkdir, parents=True, exist_ok=True)
+
+    try:
+        bytes_written = await _stream_request_to_file(request, filepath)
+        completed = await repositories.complete_submission_upload(submission_id, user_id=user_id)
+    except Exception:
+        await repositories.fail_submission_upload(
+            submission_id,
+            user_id=user_id,
+            message="Upload failed before completion",
+        )
+        raise
+
+    if not completed:
+        await asyncio.to_thread(filepath.unlink, missing_ok=True)
+        return JSONResponse(
+            {"ok": False, "error": "Pending upload not found"},
+            status_code=status.HTTP_404_NOT_FOUND,
+        )
+
+    request.app.state.worker.notify()
+    quota = await repositories.fetch_submission_quota(user_id, pending_upload["contestId"])
+    return {
+        "ok": True,
+        "submissionId": submission_id,
+        "bytesWritten": bytes_written,
+        "quota": schemas.quota_snapshot_payload(quota) if quota is not None else None,
+    }
+
+
+@app.delete("/api/submissions/{submission_id}/upload")
+async def cancel_submission_upload(
+    submission_id: str,
+    current_user: dict = Depends(get_current_user),
+):
+    user_id = current_user["id"]
+    pending_upload = await repositories.fetch_pending_submission_upload(
+        submission_id,
+        user_id=user_id,
+    )
+    if pending_upload is not None:
+        filepath = Path(pending_upload["filepath"])
+        await asyncio.to_thread(filepath.unlink, missing_ok=True)
+        await asyncio.to_thread(filepath.with_name(f"{filepath.name}.part").unlink, missing_ok=True)
+        await repositories.fail_submission_upload(
+            submission_id,
+            user_id=user_id,
+            message="Upload canceled",
+        )
+
+    return {"ok": True}
+
+
 @app.post("/api/submissions")
 async def create_submission(
     request: Request,
@@ -93,78 +296,42 @@ async def create_submission(
 ):
     user_id = current_user["id"]
 
-    filename = Path(file.filename or "").name
-    if not filename or not filename.endswith(".pkl"):
+    filename = _safe_submission_filename(file.filename)
+    if not filename:
         return JSONResponse(
             {"ok": False, "error": "File must be a .pkl file"},
             status_code=status.HTTP_400_BAD_REQUEST,
         )
 
-    submissions_root = get_submissions_root()
+    saved_filename, filepath = _submission_storage_path(filename)
+    submission_result = await repositories.prepare_submission_upload_with_quota(
+        user_id=user_id,
+        contest_id=contest_id,
+        filename=saved_filename,
+        filepath=str(filepath),
+    )
+    if not submission_result["ok"]:
+        return _submission_failure_response(submission_result)
 
-    saved_filename = f"{int(time.time() * 1000)}_{filename}"
-    filepath = submissions_root / saved_filename
-    file_written = False
     try:
         await asyncio.to_thread(_write_upload_file, file, filepath)
-        file_written = True
-        submission_result = await repositories.create_submission_with_quota(
+        completed = await repositories.complete_submission_upload(
+            submission_result["submissionId"],
             user_id=user_id,
-            contest_id=contest_id,
-            filename=saved_filename,
-            filepath=str(filepath),
         )
     except Exception:
-        if file_written:
-            await asyncio.to_thread(filepath.unlink, missing_ok=True)
+        await repositories.fail_submission_upload(
+            submission_result["submissionId"],
+            user_id=user_id,
+            message="Upload failed before completion",
+        )
         raise
 
-    if not submission_result["ok"]:
-        if file_written:
-            await asyncio.to_thread(filepath.unlink, missing_ok=True)
-
-        if submission_result["reason"] == "contest_not_found":
-            return JSONResponse(
-                {"ok": False, "error": "Contest not found"},
-                status_code=status.HTTP_404_NOT_FOUND,
-            )
-
-        if submission_result["reason"] == "submission_limit_reached":
-            return JSONResponse(
-                {
-                    "ok": False,
-                    "code": "SUBMISSION_LIMIT_REACHED",
-                    "error": "You have reached the submission limit for this contest",
-                    "quota": schemas.quota_snapshot_payload(submission_result["quota"]),
-                },
-                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            )
-
-        if submission_result["reason"] == "deadline_passed":
-            return JSONResponse(
-                {
-                    "ok": False,
-                    "code": "CONTEST_DEADLINE_PASSED",
-                    "error": "Contest submission deadline has passed",
-                    "quota": schemas.quota_snapshot_payload(submission_result["quota"]),
-                },
-                status_code=status.HTTP_400_BAD_REQUEST,
-            )
-
-        if submission_result["reason"] == "contest_closed":
-            return JSONResponse(
-                {
-                    "ok": False,
-                    "code": "CONTEST_CLOSED",
-                    "error": "Contest is no longer accepting submissions",
-                    "quota": schemas.quota_snapshot_payload(submission_result["quota"]),
-                },
-                status_code=status.HTTP_400_BAD_REQUEST,
-            )
-
+    if not completed:
+        await asyncio.to_thread(filepath.unlink, missing_ok=True)
         return JSONResponse(
-            {"ok": False, "error": "Unable to create submission"},
-            status_code=status.HTTP_400_BAD_REQUEST,
+            {"ok": False, "error": "Pending upload not found"},
+            status_code=status.HTTP_404_NOT_FOUND,
         )
 
     request.app.state.worker.notify()
