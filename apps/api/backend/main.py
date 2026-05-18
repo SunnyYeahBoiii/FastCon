@@ -12,7 +12,7 @@ from fastapi.responses import JSONResponse, StreamingResponse
 
 from . import repositories, schemas
 from .auth import get_admin_user, get_current_user
-from .config import get_max_upload_bytes, get_submissions_root
+from .config import get_submissions_root
 from .streams import SubmissionBroadcaster, default_event, named_event
 from .worker import SubmissionWorker
 
@@ -91,16 +91,6 @@ async def create_submission(
             status_code=status.HTTP_400_BAD_REQUEST,
         )
 
-    if request.headers.get("content-length"):
-        try:
-            if int(request.headers["content-length"]) > get_max_upload_bytes():
-                return JSONResponse(
-                    {"ok": False, "error": "File is too large"},
-                    status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
-                )
-        except ValueError:
-            pass
-
     contest = await repositories.fetch_contest(contest_id)
     if contest is None:
         return JSONResponse(
@@ -109,11 +99,6 @@ async def create_submission(
         )
 
     contents = await file.read()
-    if len(contents) > get_max_upload_bytes():
-        return JSONResponse(
-            {"ok": False, "error": "File is too large"},
-            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
-        )
 
     submissions_root = get_submissions_root()
     await asyncio.to_thread(submissions_root.mkdir, parents=True, exist_ok=True)

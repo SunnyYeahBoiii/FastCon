@@ -49,12 +49,6 @@ export function getJudgeTimeoutSeconds(): number {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : 120;
 }
 
-export function getMaxUploadBytes(): number {
-  const raw = readEnv("MAX_UPLOAD_BYTES") ?? `${10 * 1024 * 1024}`;
-  const parsed = Number.parseInt(raw, 10);
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : 10 * 1024 * 1024;
-}
-
 export function getWorkerPollMs(): number {
   const raw = readEnv("WORKER_POLL_MS") ?? "1000";
   const parsed = Number.parseInt(raw, 10);

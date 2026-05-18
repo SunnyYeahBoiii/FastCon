@@ -91,7 +91,3 @@ def get_worker_max_concurrent() -> int:
 
 def get_judge_timeout_seconds() -> int:
     return _read_int("JUDGE_TIMEOUT_SECONDS", 120)
-
-
-def get_max_upload_bytes() -> int:
-    return _read_int("MAX_UPLOAD_BYTES", 10 * 1024 * 1024)
