@@ -379,6 +379,69 @@ class SubmissionQuotaRepositoryTests(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(next_result["ok"])
         self.assertEqual(next_result["reason"], "submission_limit_reached")
 
+    async def test_prepare_upload_reserves_quota_until_upload_completes(self) -> None:
+        result = await repositories.prepare_submission_upload_with_quota(
+            user_id="u1",
+            contest_id="c1",
+            filename="large.pkl",
+            filepath="/tmp/large.pkl",
+        )
+
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["quota"]["used"], 1)
+        self.assertEqual(result["quota"]["remaining"], 2)
+
+        connection = sqlite3.connect(self.db_path)
+        try:
+            row = connection.execute(
+                'SELECT "status", "quotaUsageState" FROM "Submission" WHERE "id" = ?',
+                (result["submissionId"],),
+            ).fetchone()
+        finally:
+            connection.close()
+
+        self.assertEqual(row, ("uploading", "pending"))
+
+        completed = await repositories.complete_submission_upload(
+            result["submissionId"],
+            user_id="u1",
+        )
+
+        self.assertTrue(completed)
+
+        connection = sqlite3.connect(self.db_path)
+        try:
+            row = connection.execute(
+                'SELECT "status", "quotaUsageState" FROM "Submission" WHERE "id" = ?',
+                (result["submissionId"],),
+            ).fetchone()
+        finally:
+            connection.close()
+
+        self.assertEqual(row, ("queued", "pending"))
+
+    async def test_failed_upload_refunds_reserved_quota(self) -> None:
+        result = await repositories.prepare_submission_upload_with_quota(
+            user_id="u1",
+            contest_id="c1",
+            filename="large.pkl",
+            filepath="/tmp/large.pkl",
+        )
+        self.assertTrue(result["ok"])
+
+        failed = await repositories.fail_submission_upload(
+            result["submissionId"],
+            user_id="u1",
+            message="client disconnected",
+        )
+        quota = await repositories.fetch_submission_quota("u1", "c1")
+
+        self.assertTrue(failed)
+        assert quota is not None
+        self.assertEqual(quota["used"], 0)
+        self.assertEqual(quota["remaining"], 3)
+        self.assertEqual(self._quota_usage_state(result["submissionId"]), "refunded")
+
 
 class RuntimeSchemaEnsureTests(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self) -> None:

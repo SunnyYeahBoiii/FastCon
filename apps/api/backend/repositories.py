@@ -400,6 +400,7 @@ async def create_submission_with_quota(
     contest_id: str,
     filename: str,
     filepath: str,
+    initial_status: str = "queued",
 ) -> dict[str, Any]:
     submission_id = _submission_id()
     now = _utc_now()
@@ -569,18 +570,98 @@ async def create_submission_with_quota(
               "status",
               "quotaUsageState"
             )
-            VALUES (?, ?, ?, ?, ?, 'queued', 'pending')
+            VALUES (?, ?, ?, ?, ?, ?, 'pending')
             ''',
-            (submission_id, user_id, contest_id, filename, filepath),
+            (submission_id, user_id, contest_id, filename, filepath, initial_status),
         )
         await connection.commit()
     return {"ok": True, "submissionId": submission_id, "quota": quota_snapshot}
+
+
+async def prepare_submission_upload_with_quota(
+    *,
+    user_id: str,
+    contest_id: str,
+    filename: str,
+    filepath: str,
+) -> dict[str, Any]:
+    return await create_submission_with_quota(
+        user_id=user_id,
+        contest_id=contest_id,
+        filename=filename,
+        filepath=filepath,
+        initial_status="uploading",
+    )
+
+
+async def fetch_pending_submission_upload(
+    submission_id: str,
+    *,
+    user_id: str,
+) -> dict[str, Any] | None:
+    async with open_connection() as connection:
+        cursor = await connection.execute(
+            '''
+            SELECT "id", "userId", "contestId", "filename", "filepath", "status"
+            FROM "Submission"
+            WHERE "id" = ? AND "userId" = ? AND "status" = 'uploading'
+            ''',
+            (submission_id, user_id),
+        )
+        return _row_to_dict(await cursor.fetchone())
+
+
+async def complete_submission_upload(submission_id: str, *, user_id: str) -> bool:
+    async with open_connection() as connection:
+        cursor = await connection.execute(
+            '''
+            UPDATE "Submission"
+            SET "status" = 'queued'
+            WHERE "id" = ? AND "userId" = ? AND "status" = 'uploading'
+            ''',
+            (submission_id, user_id),
+        )
+        await connection.commit()
+        return cursor.rowcount == 1
+
+
+async def fail_submission_upload(
+    submission_id: str,
+    *,
+    user_id: str,
+    message: str,
+) -> bool:
+    async with open_connection() as connection:
+        cursor = await connection.execute(
+            '''
+            UPDATE "Submission"
+            SET
+              "status" = 'failed',
+              "metrics" = ?,
+              "quotaUsageState" = 'refunded'
+            WHERE "id" = ? AND "userId" = ? AND "status" = 'uploading'
+            ''',
+            (json.dumps({"error": message}), submission_id, user_id),
+        )
+        await connection.commit()
+        return cursor.rowcount == 1
 
 
 async def reset_running_submissions() -> None:
     async with open_connection() as connection:
         await connection.execute(
             'UPDATE "Submission" SET "status" = \'queued\' WHERE "status" = \'running\''
+        )
+        await connection.execute(
+            '''
+            UPDATE "Submission"
+            SET
+              "status" = 'failed',
+              "metrics" = ?,
+              "quotaUsageState" = 'refunded'
+            WHERE "status" = 'uploading'
+            ''',
+            (json.dumps({"error": "Upload interrupted before the API restarted"}),),
         )
         await connection.commit()
 
