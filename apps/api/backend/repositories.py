@@ -604,7 +604,7 @@ async def fail_submission_with_error(submission_id: str, message: str) -> None:
 
 
 async def fetch_leaderboard_rows(contest_id: str | None) -> list[dict[str, Any]]:
-    """Best graded score per user/contest plus total submission count for that contest only."""
+    """Best graded score per user/contest plus graded submission count for that contest only."""
     query = '''
         SELECT
           s."userId",
@@ -617,6 +617,8 @@ async def fetch_leaderboard_rows(contest_id: str | None) -> list[dict[str, Any]]
             FROM "Submission" sc
             WHERE sc."userId" = s."userId"
               AND sc."contestId" = s."contestId"
+              AND sc."status" = 'graded'
+              AND sc."score" IS NOT NULL
           ) AS "submissionCount"
         FROM "Submission" s
         JOIN "User" u ON u."id" = s."userId"
