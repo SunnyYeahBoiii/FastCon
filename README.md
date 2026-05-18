@@ -56,18 +56,19 @@ These routes are matched by `apps/web/middleware.ts` and rewritten from Next.js 
 - `/api/submissions/*`
 - `/api/leaderboard/*`
 
-In this path, the browser still talks to the same web origin, but Next.js rewrites the request to the FastAPI service using `FASTAPI_INTERNAL_URL`. This keeps the client API surface simple while moving submission and streaming logic into the internal service.
+In this path, the browser talks to the same web origin by default, and Next.js rewrites the request to the FastAPI service using `FASTAPI_INTERNAL_URL`. For large submission uploads, deployments can set `NEXT_PUBLIC_FASTAPI_PUBLIC_URL` to a browser-reachable FastAPI origin/path so the upload request bypasses the Next.js middleware hop.
 
 ### Submission lifecycle
 
 The end-to-end submission pipeline works like this:
 
-1. A logged-in user uploads a `.pkl` file through the web app.
-2. The request is rewritten to FastAPI.
-3. FastAPI validates the request, stores the file under `storage/submissions`, and inserts a new `Submission` row into SQLite with status `queued`.
-4. The FastAPI worker loop claims queued submissions up to `WORKER_MAX_CONCURRENT`.
-5. The worker launches `apps/api/scripts/judge_runner.py` as a subprocess using the configured Python interpreter.
-6. The judge writes results back to SQLite.
+1. A logged-in user selects a `.pkl` file through the web app.
+2. The web app sends a small init request so FastAPI validates contest state and reserves quota before file bytes are uploaded.
+3. The browser uploads the raw file body to FastAPI, which streams it into a `.part` file under `storage/submissions` and atomically renames it when complete.
+4. FastAPI marks the `Submission` row as `queued`.
+5. The FastAPI worker loop claims queued submissions up to `WORKER_MAX_CONCURRENT`.
+6. The worker launches `apps/api/scripts/judge_runner.py` as a subprocess using the configured Python interpreter.
+7. The judge writes results back to SQLite.
 7. FastAPI publishes updates to in-memory subscriber queues.
 8. Browsers receive live updates through SSE streams for submissions and leaderboard changes.
 
@@ -219,6 +220,7 @@ The most important variables are:
 - `DATABASE_URL`: SQLite file used by both apps
 - `STORAGE_ROOT`: shared storage directory
 - `FASTAPI_INTERNAL_URL`: rewrite target for submission and leaderboard APIs
+- `NEXT_PUBLIC_FASTAPI_PUBLIC_URL`: optional browser-facing FastAPI base URL/path for direct large uploads
 - `PYTHON_BIN`: Python interpreter used by the API and judge
 - `WORKER_POLL_MS`: worker wake-up interval
 - `WORKER_MAX_CONCURRENT`: max number of concurrent judge jobs
