@@ -1,22 +1,17 @@
 import { NextResponse } from "next/server";
-import { prisma } from "@/lib/db";
+import {
+  getContestsForSubmitPicker,
+  serializePublicContest,
+} from "@/lib/contests";
 
-// Public endpoint — returns active contests for contestants
+// Public endpoint — contests available on the submit picker
 export async function GET() {
   try {
-    const contests = await prisma.contest.findMany({
-      where: { status: "ongoing" },
-      orderBy: { createdAt: "desc" },
-      select: {
-        id: true,
-        title: true,
-        description: true,
-        deadline: true,
-        status: true,
-        dailySubmissionLimit: true,
-      },
+    const now = new Date();
+    const contests = await getContestsForSubmitPicker();
+    return NextResponse.json({
+      contests: contests.map((contest) => serializePublicContest(contest, now)),
     });
-    return NextResponse.json({ contests });
   } catch (error) {
     console.error("Fetch public contests error:", error);
     return NextResponse.json(

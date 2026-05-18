@@ -37,8 +37,22 @@ def _coerce_datetime(value: Any) -> datetime | None:
 
     if isinstance(value, datetime):
         parsed = value
+    elif isinstance(value, (int, float)):
+        # Prisma SQLite stores DateTime as milliseconds since epoch.
+        timestamp = float(value)
+        if timestamp >= 1_000_000_000_000:
+            parsed = datetime.fromtimestamp(timestamp / 1000, tz=timezone.utc)
+        elif timestamp >= 1_000_000_000:
+            parsed = datetime.fromtimestamp(timestamp, tz=timezone.utc)
+        else:
+            raise TypeError(f"Unsupported datetime value: {value!r}")
     elif isinstance(value, str):
-        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+        stripped = value.strip()
+        if not stripped:
+            return None
+        if stripped.isdigit():
+            return _coerce_datetime(int(stripped))
+        parsed = datetime.fromisoformat(stripped.replace("Z", "+00:00"))
     else:
         raise TypeError(f"Unsupported datetime value: {value!r}")
 
@@ -317,13 +331,30 @@ async def create_submission_with_quota(
         await connection.execute("BEGIN IMMEDIATE")
 
         contest_cursor = await connection.execute(
-            'SELECT "id", "dailySubmissionLimit", "deadline" FROM "Contest" WHERE "id" = ?',
+            'SELECT "id", "status", "dailySubmissionLimit", "deadline" FROM "Contest" WHERE "id" = ?',
             (contest_id,),
         )
         contest = _row_to_dict(await contest_cursor.fetchone())
         if contest is None:
             await connection.rollback()
             return {"ok": False, "reason": "contest_not_found"}
+
+        contest_status = str(contest.get("status") or "ongoing").strip().lower()
+        if contest_status == "completed":
+            quota_snapshot = _build_quota_snapshot(
+                contest_id=contest_id,
+                daily_submission_limit=contest["dailySubmissionLimit"],
+                contest_deadline=contest["deadline"],
+                window_started_at=None,
+                submission_count=0,
+                now=now,
+            )
+            await connection.rollback()
+            return {
+                "ok": False,
+                "reason": "contest_closed",
+                "quota": quota_snapshot,
+            }
 
         deadline = _coerce_datetime(contest["deadline"])
         if deadline is not None and now > deadline:

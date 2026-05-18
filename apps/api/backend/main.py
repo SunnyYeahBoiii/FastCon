@@ -46,6 +46,15 @@ async def validation_exception_handler(_request: Request, exc: RequestValidation
     return JSONResponse({"ok": False, "error": message}, status_code=status.HTTP_400_BAD_REQUEST)
 
 
+@app.exception_handler(Exception)
+async def unhandled_exception_handler(_request: Request, exc: Exception) -> JSONResponse:
+    print(f"Unhandled API error: {exc}")
+    return JSONResponse(
+        {"ok": False, "error": "Internal server error"},
+        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+    )
+
+
 STARTED_AT = time.time()
 
 
@@ -153,6 +162,17 @@ async def create_submission(
                     "ok": False,
                     "code": "CONTEST_DEADLINE_PASSED",
                     "error": "Contest submission deadline has passed",
+                    "quota": schemas.quota_snapshot_payload(submission_result["quota"]),
+                },
+                status_code=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if submission_result["reason"] == "contest_closed":
+            return JSONResponse(
+                {
+                    "ok": False,
+                    "code": "CONTEST_CLOSED",
+                    "error": "Contest is no longer accepting submissions",
                     "quota": schemas.quota_snapshot_payload(submission_result["quota"]),
                 },
                 status_code=status.HTTP_400_BAD_REQUEST,

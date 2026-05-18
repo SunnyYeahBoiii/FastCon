@@ -10,6 +10,12 @@ interface Contest {
   deadline: string | null;
   status: string;
   dailySubmissionLimit: number | null;
+  isOpenForSubmission: boolean;
+}
+
+interface SubmitPageProps {
+  initialContests: Contest[];
+  initialContestId?: string | null;
 }
 
 interface Submission {
@@ -36,11 +42,27 @@ interface SubmissionQuota {
   isQuotaExceeded: boolean;
 }
 
-export default function SubmitPage() {
-  const [selectedContest, setSelectedContest] = useState("");
+function pickInitialContestId(contests: Contest[], preferredId: string | null | undefined) {
+  if (preferredId && contests.some((contest) => contest.id === preferredId)) {
+    return preferredId;
+  }
+
+  const firstOpen = contests.find((contest) => contest.isOpenForSubmission);
+  return firstOpen?.id ?? "";
+}
+
+export default function SubmitPage({
+  initialContests,
+  initialContestId = null,
+}: SubmitPageProps) {
+  const [selectedContest, setSelectedContest] = useState(() =>
+    pickInitialContestId(initialContests, initialContestId)
+  );
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [contests, setContests] = useState<Contest[]>([]);
+  const [contests, setContests] = useState<Contest[]>(initialContests);
+  const [contestsLoading, setContestsLoading] = useState(false);
+  const [contestsError, setContestsError] = useState<string | null>(null);
   const [mySubmissions, setMySubmissions] = useState<Submission[]>([]);
   const [selectedContestQuota, setSelectedContestQuota] = useState<SubmissionQuota | null>(null);
   const [quotaLoading, setQuotaLoading] = useState(false);
@@ -48,25 +70,61 @@ export default function SubmitPage() {
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [submitNotice, setSubmitNotice] = useState<string | null>(null);
   const [serverTimeOffsetMs, setServerTimeOffsetMs] = useState(0);
-  const [nowMs, setNowMs] = useState(() => Date.now() + serverTimeOffsetMs);
+  const [nowMs, setNowMs] = useState(0);
+  const [hasMounted, setHasMounted] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
+    setHasMounted(true);
+    setNowMs(Date.now() + serverTimeOffsetMs);
+  }, [serverTimeOffsetMs]);
+
+  useEffect(() => {
+    if (!hasMounted) {
+      return;
+    }
+
     const intervalId = window.setInterval(() => {
       setNowMs(Date.now() + serverTimeOffsetMs);
     }, 1000);
 
     return () => window.clearInterval(intervalId);
-  }, [serverTimeOffsetMs]);
+  }, [hasMounted, serverTimeOffsetMs]);
+
+  const fetchContests = useCallback(async () => {
+    setContestsLoading(true);
+    setContestsError(null);
+
+    try {
+      const response = await fetch("/cs116.khtn/api/public/contests");
+      const data = await readJsonResponse<{ contests?: Contest[]; error?: string }>(response);
+
+      if (!response.ok) {
+        throw new Error(data?.error || "Không thể tải danh sách cuộc thi");
+      }
+
+      const nextContests = data?.contests ?? [];
+      setContests(nextContests);
+      setSelectedContest((current) => {
+        if (current && nextContests.some((contest) => contest.id === current)) {
+          return current;
+        }
+        return pickInitialContestId(nextContests, initialContestId);
+      });
+    } catch (error) {
+      console.error("Fetch contests error:", error);
+      setContestsError("Không thể tải danh sách cuộc thi. Vui lòng thử lại.");
+    } finally {
+      setContestsLoading(false);
+    }
+  }, [initialContestId]);
 
   useEffect(() => {
-    fetch("/cs116.khtn/api/public/contests")
-      .then(async (res) => {
-        const data = await readJsonResponse<{ contests?: Contest[] }>(res);
-        setContests(data?.contests || []);
-      })
-      .catch(console.error);
-  }, []);
+    if (initialContests.length > 0) {
+      return;
+    }
+    void fetchContests();
+  }, [fetchContests, initialContests.length]);
 
   const fetchMySubmissions = useCallback(() => {
     fetch("/cs116.khtn/api/submissions/user")
@@ -175,8 +233,11 @@ export default function SubmitPage() {
     return () => eventSource.close();
   }, []);
 
+  const openContests = contests.filter((contest) => contest.isOpenForSubmission);
+  const closedContests = contests.filter((contest) => !contest.isOpenForSubmission);
   const selectedContestRecord =
     contests.find((contest) => contest.id === selectedContest) ?? null;
+  const selectedContestIsOpen = selectedContestRecord?.isOpenForSubmission ?? false;
   const remainingQuotaLabel = quotaLoading
     ? "Đang tải..."
     : selectedContestQuota?.isLimited === false
@@ -187,7 +248,9 @@ export default function SubmitPage() {
   const isSubmitDisabled =
     isSubmitting ||
     quotaLoading ||
+    contestsLoading ||
     !selectedContest ||
+    !selectedContestIsOpen ||
     !selectedFile ||
     Boolean(selectedContestQuota?.isDeadlinePassed) ||
     Boolean(selectedContestQuota?.isQuotaExceeded);
@@ -219,6 +282,11 @@ export default function SubmitPage() {
 
     if (!selectedContest) {
       setSubmitError("Vui lòng chọn cuộc thi");
+      return;
+    }
+
+    if (!selectedContestIsOpen) {
+      setSubmitError("Cuộc thi này không còn nhận bài nộp.");
       return;
     }
 
@@ -265,6 +333,11 @@ export default function SubmitPage() {
         }
         if (data?.code === "CONTEST_DEADLINE_PASSED") {
           setSubmitError("Đã quá hạn nộp bài cho contest này.");
+        } else if (data?.code === "CONTEST_CLOSED") {
+          setSubmitError("Cuộc thi này đã đóng, không nhận bài nộp.");
+          void fetchContests();
+        } else if (data?.code === "SUBMISSION_LIMIT_REACHED") {
+          setSubmitError("Bạn đã dùng hết lượt nộp trong cửa sổ 24 giờ hiện tại.");
         } else {
           setSubmitError(data?.error || "Không thể nộp bài");
         }
@@ -306,12 +379,38 @@ export default function SubmitPage() {
         ) : null}
 
         <div className="space-y-3">
-          <label
-            className="block text-sm font-semibold text-on-surface"
-            htmlFor="contest-select"
-          >
-            Select Contest
-          </label>
+          <div className="flex items-center justify-between gap-3">
+            <label
+              className="block text-sm font-semibold text-on-surface"
+              htmlFor="contest-select"
+            >
+              Select Contest
+            </label>
+            <button
+              type="button"
+              onClick={() => void fetchContests()}
+              disabled={contestsLoading}
+              className="text-xs font-medium text-primary hover:underline disabled:opacity-60"
+            >
+              {contestsLoading ? "Đang tải..." : "Làm mới"}
+            </button>
+          </div>
+
+          {contestsError ? (
+            <div className="rounded-lg border border-error-container/40 bg-error-container/20 px-4 py-3 text-sm text-error">
+              {contestsError}
+            </div>
+          ) : null}
+
+          {contestsLoading && contests.length === 0 ? (
+            <div className="rounded-lg bg-surface-container-highest px-4 py-3 text-sm text-on-surface-variant">
+              Đang tải danh sách cuộc thi...
+            </div>
+          ) : contests.length === 0 ? (
+            <div className="rounded-lg bg-surface-container-highest px-4 py-3 text-sm text-on-surface-variant">
+              Hiện chưa có cuộc thi nào để nộp bài.
+            </div>
+          ) : (
           <div className="relative">
             <select
               id="contest-select"
@@ -323,19 +422,38 @@ export default function SubmitPage() {
               }}
               className="appearance-none w-full bg-surface-container-highest border-0 border-b-2 border-transparent text-on-surface text-sm rounded px-4 py-3 focus:ring-0 focus:border-primary focus:bg-surface-container-lowest transition-all cursor-pointer"
             >
-              <option value="" disabled>
-                Choose a contest to submit for...
+              <option value="" disabled={openContests.length > 0}>
+                {openContests.length > 0
+                  ? "Chọn cuộc thi để nộp bài..."
+                  : "Không có cuộc thi đang mở"}
               </option>
-              {contests.map((contest) => (
-                <option key={contest.id} value={contest.id}>
-                  {contest.title}
-                </option>
-              ))}
+              {openContests.length > 0 ? (
+                <optgroup label="Đang mở nộp bài">
+                  {openContests.map((contest) => (
+                    <option key={contest.id} value={contest.id}>
+                      {contest.title}
+                    </option>
+                  ))}
+                </optgroup>
+              ) : null}
+              {closedContests.length > 0 ? (
+                <optgroup label="Đã đóng / quá hạn">
+                  {closedContests.map((contest) => (
+                    <option key={contest.id} value={contest.id} disabled>
+                      {contest.title}
+                      {contest.deadline
+                        ? ` — hạn ${formatAbsoluteTime(contest.deadline, hasMounted)}`
+                        : " — đã đóng"}
+                    </option>
+                  ))}
+                </optgroup>
+              ) : null}
             </select>
             <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-4 text-on-surface-variant">
               <ChevronDown className="w-5 h-5" />
             </div>
           </div>
+          )}
         </div>
 
         {selectedContestRecord ? (
@@ -352,11 +470,21 @@ export default function SubmitPage() {
             <div className="grid gap-3 sm:grid-cols-2">
               <InfoChip
                 label="Trạng thái"
-                value={selectedContestRecord.status === "ongoing" ? "Đang hoạt động" : "Đã hoàn thành"}
+                value={
+                  selectedContestRecord.isOpenForSubmission
+                    ? "Đang mở nộp bài"
+                    : selectedContestRecord.status === "ongoing"
+                      ? "Đã quá hạn"
+                      : "Đã hoàn thành"
+                }
               />
               <InfoChip
                 label="Hạn chót"
-                value={selectedContestRecord.deadline ? formatAbsoluteTime(selectedContestRecord.deadline) : "Không có"}
+                value={
+                  selectedContestRecord.deadline
+                    ? formatAbsoluteTime(selectedContestRecord.deadline, hasMounted)
+                    : "Không có"
+                }
               />
               <InfoChip
                 label="Giới hạn 24 giờ"
@@ -371,6 +499,12 @@ export default function SubmitPage() {
                 value={remainingQuotaLabel}
               />
             </div>
+
+            {!selectedContestIsOpen ? (
+              <div className="rounded-lg border border-error-container/30 bg-error-container/15 px-4 py-3 text-sm text-error">
+                Cuộc thi này không còn nhận bài nộp. Vui lòng chọn cuộc thi khác trong danh sách.
+              </div>
+            ) : null}
 
             {quotaError ? (
               <div className="rounded-lg border border-error-container/30 bg-error-container/15 px-4 py-3 text-sm text-error">
@@ -400,7 +534,7 @@ export default function SubmitPage() {
                       <p className="text-on-surface-variant">
                         Cửa sổ hiện tại bắt đầu lúc{" "}
                         <span className="font-medium text-on-surface">
-                          {formatAbsoluteTime(selectedContestQuota.windowStartedAt)}
+                          {formatAbsoluteTime(selectedContestQuota.windowStartedAt, hasMounted)}
                         </span>
                         .
                       </p>
@@ -415,11 +549,16 @@ export default function SubmitPage() {
                         <div className="text-xs uppercase tracking-wide text-on-surface-variant mb-1">
                           Reset quota
                         </div>
-                        <div className="text-lg font-semibold text-on-surface">
-                          {formatCountdown(selectedContestQuota.resetAt, nowMs)}
+                        <div
+                          className="text-lg font-semibold text-on-surface"
+                          suppressHydrationWarning
+                        >
+                          {hasMounted
+                            ? formatCountdown(selectedContestQuota.resetAt, nowMs)
+                            : "--:--:--"}
                         </div>
                         <div className="text-xs text-on-surface-variant mt-1">
-                          Lúc {formatAbsoluteTime(selectedContestQuota.resetAt)}
+                          Lúc {formatAbsoluteTime(selectedContestQuota.resetAt, hasMounted)}
                         </div>
                       </div>
                     ) : null}
@@ -500,9 +639,13 @@ export default function SubmitPage() {
               ? "Submitting..."
               : quotaLoading
                 ? "Checking quota..."
-                : selectedContestQuota?.isDeadlinePassed
+                : !selectedContestIsOpen
                   ? "Submission Closed"
-                  : "Submit Evaluation"}
+                  : selectedContestQuota?.isDeadlinePassed
+                    ? "Submission Closed"
+                    : selectedContestQuota?.isQuotaExceeded
+                      ? "Quota Exceeded"
+                      : "Submit Evaluation"}
           </button>
         </div>
       </form>
@@ -578,7 +721,10 @@ function SubmissionCard({ sub, error }: { sub: Submission; error: string | null 
             <StatusBadge status={sub.status} />
           </div>
           <div className="text-xs text-on-surface-variant">
-            {new Date(sub.createdAt).toLocaleString("vi-VN")} · {sub.filename}
+            <span suppressHydrationWarning>
+              {new Date(sub.createdAt).toLocaleString("vi-VN")}
+            </span>{" "}
+            · {sub.filename}
           </div>
         </div>
         <div className="ml-4 text-right">
@@ -610,7 +756,10 @@ function SubmissionCard({ sub, error }: { sub: Submission; error: string | null 
   );
 }
 
-function formatAbsoluteTime(value: string) {
+function formatAbsoluteTime(value: string, localeReady: boolean) {
+  if (!localeReady) {
+    return new Date(value).toISOString().replace("T", " ").slice(0, 16);
+  }
   return new Date(value).toLocaleString("vi-VN");
 }
 
@@ -638,8 +787,9 @@ async function readJsonResponse<T>(response: Response): Promise<T | null> {
 
   try {
     return JSON.parse(rawText) as T;
-  } catch (error) {
-    console.error("Failed to parse JSON response:", error, rawText);
-    return null;
+  } catch {
+    const fallback =
+      rawText.length <= 200 ? rawText.trim() : `${rawText.trim().slice(0, 200)}...`;
+    return { error: fallback || response.statusText || "Invalid response" } as T;
   }
 }
