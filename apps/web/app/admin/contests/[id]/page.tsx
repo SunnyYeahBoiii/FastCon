@@ -7,6 +7,7 @@ import EditForm from "./EditForm";
 import GroundTruthSection from "./GroundTruthSection";
 import SubmissionsTable from "./SubmissionsTable";
 import EvaluateCodeSection from "./EvaluateCodeSection";
+import QuotaResetSection from "./QuotaResetSection";
 
 interface ContestDetailPageProps {
   params: { id: string };
@@ -79,6 +80,8 @@ export default async function ContestDetailPage({ params }: ContestDetailPagePro
           groundTruthPath={contest.groundTruthPath}
         />
       </div>
+
+      <QuotaResetSection contestId={contest.id} />
 
       {/* Submissions */}
       <SubmissionsTable
