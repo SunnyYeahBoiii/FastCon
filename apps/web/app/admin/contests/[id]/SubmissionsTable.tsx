@@ -264,6 +264,7 @@ function SubmissionDetailModal({ submission, onClose }: { submission: Submission
 
 function formatStatus(status: string) {
   const statusMap: Record<string, { label: string; class: string }> = {
+    uploading: { label: "Đang tải lên", class: "bg-surface-container-highest text-on-surface-variant" },
     queued: { label: "Đang chờ", class: "bg-surface-container-highest text-on-surface-variant" },
     running: { label: "Đang chấm", class: "bg-tertiary-container text-on-tertiary animate-pulse" },
     uploaded: { label: "Đã nộp", class: "bg-surface-container-highest text-on-surface-variant" },

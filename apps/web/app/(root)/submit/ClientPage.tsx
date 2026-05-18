@@ -1,7 +1,20 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  type Dispatch,
+  type SetStateAction,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 import { Upload, Send, ChevronDown, CheckCircle, Clock, AlertCircle } from "lucide-react";
+
+declare const process: {
+  env: {
+    NEXT_PUBLIC_FASTAPI_PUBLIC_URL?: string;
+  };
+};
 
 interface Contest {
   id: string;
@@ -42,6 +55,20 @@ interface SubmissionQuota {
   isQuotaExceeded: boolean;
 }
 
+interface SubmissionUploadResponse {
+  code?: string;
+  error?: string;
+  submissionId?: string;
+  quota?: SubmissionQuota | null;
+}
+
+const API_BASE_URL =
+  process.env.NEXT_PUBLIC_FASTAPI_PUBLIC_URL?.replace(/\/$/, "") || "/cs116.khtn";
+
+function apiUrl(path: string) {
+  return `${API_BASE_URL}${path}`;
+}
+
 function pickInitialContestId(contests: Contest[], preferredId: string | null | undefined) {
   if (preferredId && contests.some((contest) => contest.id === preferredId)) {
     return preferredId;
@@ -69,6 +96,7 @@ export default function SubmitPage({
   const [quotaError, setQuotaError] = useState<string | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [submitNotice, setSubmitNotice] = useState<string | null>(null);
+  const [uploadProgress, setUploadProgress] = useState<number | null>(null);
   const [serverTimeOffsetMs, setServerTimeOffsetMs] = useState(0);
   const [nowMs, setNowMs] = useState(0);
   const [hasMounted, setHasMounted] = useState(false);
@@ -96,7 +124,9 @@ export default function SubmitPage({
     setContestsError(null);
 
     try {
-      const response = await fetch("/cs116.khtn/api/public/contests");
+      const response = await fetch(apiUrl("/api/public/contests"), {
+        credentials: "include",
+      });
       const data = await readJsonResponse<{ contests?: Contest[]; error?: string }>(response);
 
       if (!response.ok) {
@@ -127,7 +157,7 @@ export default function SubmitPage({
   }, [fetchContests, initialContests.length]);
 
   const fetchMySubmissions = useCallback(() => {
-    fetch("/cs116.khtn/api/submissions/user")
+    fetch(apiUrl("/api/submissions/user"), { credentials: "include" })
       .then(async (res) => {
         const data = await readJsonResponse<{ submissions?: Submission[] }>(res);
         setMySubmissions(data?.submissions || []);
@@ -140,7 +170,8 @@ export default function SubmitPage({
     setQuotaError(null);
     try {
       const response = await fetch(
-        `/cs116.khtn/api/submissions/quota?contestId=${encodeURIComponent(contestId)}`
+        apiUrl(`/api/submissions/quota?contestId=${encodeURIComponent(contestId)}`),
+        { credentials: "include" }
       );
       const data = await readJsonResponse<{ error?: string; quota?: SubmissionQuota }>(response);
 
@@ -203,7 +234,9 @@ export default function SubmitPage({
   }, [selectedContest, selectedContestQuota?.resetAt, fetchQuota]);
 
   useEffect(() => {
-    const eventSource = new EventSource("/cs116.khtn/api/submissions/stream");
+    const eventSource = new EventSource(apiUrl("/api/submissions/stream"), {
+      withCredentials: true,
+    });
 
     eventSource.addEventListener("initial", (event) => {
       const data = JSON.parse(event.data);
@@ -301,23 +334,42 @@ export default function SubmitPage({
     }
 
     setIsSubmitting(true);
+    setUploadProgress(0);
+    let pendingSubmissionId: string | null = null;
 
     try {
-      const formData = new FormData();
-      formData.append("file", selectedFile);
-      formData.append("contestId", selectedContest);
-
-      const response = await fetch("/cs116.khtn/api/submissions", {
+      const initResponse = await fetch(apiUrl("/api/submissions/init"), {
         method: "POST",
-        body: formData,
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          contestId: selectedContest,
+          filename: selectedFile.name,
+        }),
       });
-      const data = await readJsonResponse<{
-        code?: string;
-        error?: string;
-        quota?: SubmissionQuota;
-      }>(response);
+      const initData = await readJsonResponse<SubmissionUploadResponse>(initResponse);
 
-      if (response.ok) {
+      if (!initResponse.ok || !initData?.submissionId) {
+        if (initData?.quota) {
+          setSelectedContestQuota(initData.quota);
+        }
+        handleSubmissionError(initData, fetchContests, setSubmitError);
+        return;
+      }
+
+      pendingSubmissionId = initData.submissionId;
+      if (initData.quota) {
+        setSelectedContestQuota(initData.quota);
+      }
+
+      const uploadResult = await uploadSubmissionFile(
+        apiUrl(`/api/submissions/${encodeURIComponent(initData.submissionId)}/file`),
+        selectedFile,
+        setUploadProgress
+      );
+      const data = uploadResult.data;
+
+      if (uploadResult.ok) {
         setSubmitNotice("Bài nộp đã được nhận và đưa vào hàng chờ chấm.");
         setSelectedFile(null);
         if (data?.quota) {
@@ -331,22 +383,22 @@ export default function SubmitPage({
         if (data?.quota) {
           setSelectedContestQuota(data.quota);
         }
-        if (data?.code === "CONTEST_DEADLINE_PASSED") {
-          setSubmitError("Đã quá hạn nộp bài cho contest này.");
-        } else if (data?.code === "CONTEST_CLOSED") {
-          setSubmitError("Cuộc thi này đã đóng, không nhận bài nộp.");
-          void fetchContests();
-        } else if (data?.code === "SUBMISSION_LIMIT_REACHED") {
-          setSubmitError("Bạn đã dùng hết lượt nộp trong cửa sổ 24 giờ hiện tại.");
-        } else {
-          setSubmitError(data?.error || "Không thể nộp bài");
-        }
+        handleSubmissionError(data, fetchContests, setSubmitError);
+        void fetchQuota(selectedContest);
       }
     } catch (error) {
       console.error("Submission error:", error);
+      if (pendingSubmissionId) {
+        await fetch(apiUrl(`/api/submissions/${encodeURIComponent(pendingSubmissionId)}/upload`), {
+          method: "DELETE",
+          credentials: "include",
+        }).catch(console.error);
+      }
+      void fetchQuota(selectedContest);
       setSubmitError("Nộp bài thất bại. Vui lòng thử lại.");
     } finally {
       setIsSubmitting(false);
+      setUploadProgress(null);
     }
   };
 
@@ -607,6 +659,19 @@ export default function SubmitPage({
                   <p className="text-sm text-on-surface-variant">
                     Click to change file
                   </p>
+                  {isSubmitting && uploadProgress !== null ? (
+                    <div className="mt-4 w-full max-w-xs">
+                      <div className="h-2 overflow-hidden rounded-full bg-surface-container-high">
+                        <div
+                          className="h-full rounded-full bg-primary transition-[width]"
+                          style={{ width: `${uploadProgress}%` }}
+                        />
+                      </div>
+                      <div className="mt-2 text-xs text-on-surface-variant">
+                        {uploadProgress}% uploaded
+                      </div>
+                    </div>
+                  ) : null}
                 </>
               ) : (
                 <>
@@ -681,6 +746,7 @@ function InfoChip({ label, value }: { label: string; value: string }) {
 function StatusBadge({ status }: { status: string }) {
   const config = {
     graded: { icon: CheckCircle, bg: "bg-primary-container/20", text: "text-primary", label: "Đã chấm" },
+    uploading: { icon: Clock, bg: "bg-surface-container-high", text: "text-on-surface-variant", label: "Đang tải lên", pulse: true },
     queued: { icon: Clock, bg: "bg-surface-container-high", text: "text-on-surface-variant", label: "Đang chờ" },
     running: { icon: Clock, bg: "bg-tertiary-container/20", text: "text-tertiary", label: "Đang chấm", pulse: true },
     uploaded: { icon: Clock, bg: "bg-surface-container-high", text: "text-on-surface-variant", label: "Đang chờ" },
@@ -791,5 +857,59 @@ async function readJsonResponse<T>(response: Response): Promise<T | null> {
     const fallback =
       rawText.length <= 200 ? rawText.trim() : `${rawText.trim().slice(0, 200)}...`;
     return { error: fallback || response.statusText || "Invalid response" } as T;
+  }
+}
+
+function uploadSubmissionFile(
+  url: string,
+  file: File,
+  onProgress: Dispatch<SetStateAction<number | null>>
+): Promise<{ ok: boolean; data: SubmissionUploadResponse | null }> {
+  return new Promise((resolve, reject) => {
+    const request = new XMLHttpRequest();
+    request.open("PUT", url);
+    request.withCredentials = true;
+    request.setRequestHeader("Content-Type", "application/octet-stream");
+
+    request.upload.onprogress = (event) => {
+      if (!event.lengthComputable || event.total === 0) {
+        return;
+      }
+      onProgress(Math.min(99, Math.round((event.loaded / event.total) * 100)));
+    };
+
+    request.onload = () => {
+      onProgress(100);
+      let data: SubmissionUploadResponse | null = null;
+      if (request.responseText) {
+        try {
+          data = JSON.parse(request.responseText) as SubmissionUploadResponse;
+        } catch {
+          data = { error: request.responseText.slice(0, 200) || request.statusText };
+        }
+      }
+      resolve({ ok: request.status >= 200 && request.status < 300, data });
+    };
+
+    request.onerror = () => reject(new Error("Upload failed"));
+    request.onabort = () => reject(new Error("Upload canceled"));
+    request.send(file);
+  });
+}
+
+function handleSubmissionError(
+  data: SubmissionUploadResponse | null | undefined,
+  fetchContests: () => Promise<void>,
+  setSubmitError: Dispatch<SetStateAction<string | null>>
+) {
+  if (data?.code === "CONTEST_DEADLINE_PASSED") {
+    setSubmitError("Đã quá hạn nộp bài cho contest này.");
+  } else if (data?.code === "CONTEST_CLOSED") {
+    setSubmitError("Cuộc thi này đã đóng, không nhận bài nộp.");
+    void fetchContests();
+  } else if (data?.code === "SUBMISSION_LIMIT_REACHED") {
+    setSubmitError("Bạn đã dùng hết lượt nộp trong cửa sổ 24 giờ hiện tại.");
+  } else {
+    setSubmitError(data?.error || "Không thể nộp bài");
   }
 }

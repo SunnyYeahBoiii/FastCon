@@ -6,6 +6,7 @@ import ChangePasswordForm from "./ChangePasswordForm";
 
 const statusColors: Record<string, string> = {
   uploaded: "bg-surface-container-highest text-on-surface-variant",
+  uploading: "bg-surface-container-highest text-on-surface-variant",
   queued: "bg-yellow-500/20 text-yellow-600 dark:text-yellow-400",
   running: "bg-blue-500/20 text-blue-600 dark:text-blue-400",
   graded: "bg-green-500/20 text-green-600 dark:text-green-400",

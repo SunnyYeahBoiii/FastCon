@@ -82,6 +82,7 @@ const QUEUED_STATUS = {
 };
 
 const statusMap: Record<string, { label: string; class: string }> = {
+  uploading: { label: "Đang tải lên", class: "bg-surface-container-highest text-on-surface-variant" },
   queued: QUEUED_STATUS,
   running: { label: "Đang chấm", class: "bg-tertiary-container text-on-tertiary animate-pulse" },
   graded: { label: "Đã chấm", class: "bg-secondary-container text-on-secondary" },
