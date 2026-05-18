@@ -192,7 +192,7 @@ require_dir "$ROOT_DIR/node_modules" "Node dependencies are missing."
 require_executable "$VENV_DIR/bin/python3" "Python virtual environment is missing."
 require_file "$WEB_DIR/.env.local" "Web environment file is missing."
 require_file "$API_DIR/.env.local" "API environment file is missing."
-require_file "$ROOT_DIR/node_modules/.prisma/client/index.js" "Prisma client is missing."
+require_executable "$ROOT_DIR/node_modules/.bin/prisma" "Prisma executable is missing."
 require_executable "$ROOT_DIR/node_modules/.bin/next" "Next.js executable is missing."
 require_file "$WEB_DIR/.next/BUILD_ID" "Next.js production build is missing."
 if ! python_meets_minimum "$VENV_DIR/bin/python3"; then
@@ -201,6 +201,19 @@ if ! python_meets_minimum "$VENV_DIR/bin/python3"; then
     exit 1
 fi
 info "Required artifacts found"
+echo ""
+
+step "Generating Prisma client..."
+cd "$ROOT_DIR"
+npm run prisma:generate
+require_file "$ROOT_DIR/node_modules/.prisma/client/index.js" "Prisma client generation failed."
+info "Prisma client generated"
+echo ""
+
+step "Syncing database schema..."
+cd "$ROOT_DIR"
+npm run db:push
+info "Database schema synced"
 echo ""
 
 step "Activating Python virtual environment..."
