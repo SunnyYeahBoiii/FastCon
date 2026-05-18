@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import shutil
 import time
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -20,8 +21,16 @@ broadcaster = SubmissionBroadcaster()
 worker = SubmissionWorker(broadcaster)
 
 
+def _write_upload_file(file: UploadFile, filepath: Path) -> None:
+    with filepath.open("wb") as destination:
+        shutil.copyfileobj(file.file, destination, length=1024 * 1024)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    submissions_root = get_submissions_root()
+    await asyncio.to_thread(submissions_root.mkdir, parents=True, exist_ok=True)
+    await repositories.ensure_runtime_schema()
     await worker.start()
     app.state.worker = worker
     app.state.broadcaster = broadcaster
@@ -91,23 +100,13 @@ async def create_submission(
             status_code=status.HTTP_400_BAD_REQUEST,
         )
 
-    contest = await repositories.fetch_contest(contest_id)
-    if contest is None:
-        return JSONResponse(
-            {"ok": False, "error": "Contest not found"},
-            status_code=status.HTTP_404_NOT_FOUND,
-        )
-
-    contents = await file.read()
-
     submissions_root = get_submissions_root()
-    await asyncio.to_thread(submissions_root.mkdir, parents=True, exist_ok=True)
 
     saved_filename = f"{int(time.time() * 1000)}_{filename}"
     filepath = submissions_root / saved_filename
     file_written = False
     try:
-        await asyncio.to_thread(filepath.write_bytes, contents)
+        await asyncio.to_thread(_write_upload_file, file, filepath)
         file_written = True
         submission_result = await repositories.create_submission_with_quota(
             user_id=user_id,

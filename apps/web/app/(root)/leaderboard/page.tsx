@@ -37,26 +37,44 @@ export default function LeaderboardPage() {
 
   const queryParams = selectedContest ? `?contestId=${selectedContest}` : "";
 
-  // Fetch initial data
   useEffect(() => {
-    setLoading(true);
-    fetch(`/cs116.khtn/api/leaderboard${queryParams}`)
-      .then((r) => r.json())
-      .then((data) => {
-        setLeaderboard(data.leaderboard);
-        setLoading(false);
-      })
-      .catch(console.error);
-  }, [selectedContest]);
+    let active = true;
+    const controller = new AbortController();
 
-  // SSE connection for real-time updates
-  useEffect(() => {
+    setLoading(true);
+    setLeaderboard([]);
+
+    const loadLeaderboard = async () => {
+      try {
+        const response = await fetch(`/cs116.khtn/api/leaderboard${queryParams}`, {
+          signal: controller.signal,
+        });
+        const data = await response.json();
+        if (!active) {
+          return;
+        }
+        setLeaderboard(data.leaderboard ?? []);
+        setLoading(false);
+      } catch (error) {
+        if (!active || (error instanceof DOMException && error.name === "AbortError")) {
+          return;
+        }
+        console.error(error);
+        setLoading(false);
+      }
+    };
+
+    void loadLeaderboard();
+
     const eventSource = new EventSource(`/cs116.khtn/api/leaderboard/stream${queryParams}`);
 
     eventSource.onmessage = (event) => {
+      if (!active) {
+        return;
+      }
       const data = JSON.parse(event.data);
       if (data.type === "initial" || data.type === "update") {
-        setLeaderboard(data.leaderboard);
+        setLeaderboard(data.leaderboard ?? []);
         setLoading(false);
       }
     };
@@ -65,32 +83,24 @@ export default function LeaderboardPage() {
       eventSource.close();
     };
 
-    return () => eventSource.close();
-  }, [selectedContest]);
+    return () => {
+      active = false;
+      controller.abort();
+      eventSource.close();
+    };
+  }, [selectedContest, queryParams]);
 
   const filteredLeaderboard = leaderboard
     .filter((entry) =>
       entry.userName.toLowerCase().includes(searchQuery.toLowerCase())
     )
-    .slice(0, filter === "top10" ? 10 : leaderboard.length);
-
-  const getTrophyColor = (rank: number) => {
-    if (rank === 1) return "text-tertiary-container";
-    if (rank === 2) return "text-outline";
-    if (rank === 3) return "text-secondary";
-    return "";
-  };
+    .slice(0, filter === "top10" ? 10 : undefined);
 
   const getRowBackground = (rank: number) => {
     return rank % 2 === 0 ? "bg-surface" : "";
   };
 
-  const showContestColumn = !!selectedContest;
-
-  const sortedLeaderboard = [...filteredLeaderboard].sort((a, b) => {
-    if (b.recordPoints !== a.recordPoints) return b.recordPoints - a.recordPoints;
-    return b.score - a.score;
-  });
+  const showContestColumn = !selectedContest;
 
   if (loading) {
     return (
@@ -201,9 +211,9 @@ export default function LeaderboardPage() {
                   </td>
                 </tr>
               ) : (
-                sortedLeaderboard.map((entry) => (
+                filteredLeaderboard.map((entry) => (
                   <tr
-                    key={entry.userId}
+                    key={`${entry.userId}-${entry.contestId}`}
                     className={`group hover:bg-surface-container-low transition-colors duration-150 ${getRowBackground(entry.rank)}`}
                   >
                     {/* Rank with trophy icon for top 3 */}

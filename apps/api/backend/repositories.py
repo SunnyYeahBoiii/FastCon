@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+import asyncio
 import json
 import secrets
 from contextlib import asynccontextmanager
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 from typing import Any, AsyncIterator
 
 import aiosqlite
@@ -11,6 +13,8 @@ import aiosqlite
 from .config import get_sqlite_path
 
 QUOTA_WINDOW_DURATION = timedelta(hours=24)
+_runtime_schema_path: Path | None = None
+_runtime_schema_lock = asyncio.Lock()
 
 
 def _submission_id() -> str:
@@ -182,6 +186,22 @@ async def ensure_submission_quota_schema(connection: aiosqlite.Connection) -> No
     await connection.commit()
 
 
+async def ensure_runtime_schema() -> None:
+    global _runtime_schema_path
+
+    sqlite_path = get_sqlite_path()
+    if _runtime_schema_path == sqlite_path:
+        return
+
+    async with _runtime_schema_lock:
+        if _runtime_schema_path == sqlite_path:
+            return
+
+        async with open_connection() as connection:
+            await ensure_submission_quota_schema(connection)
+        _runtime_schema_path = sqlite_path
+
+
 async def fetch_user_by_session(session_id: str) -> dict[str, Any] | None:
     async with open_connection() as connection:
         cursor = await connection.execute(
@@ -292,8 +312,8 @@ async def fetch_submission_quota(user_id: str, contest_id: str) -> dict[str, Any
     if contest is None:
         return None
 
+    await ensure_runtime_schema()
     async with open_connection() as connection:
-        await ensure_submission_quota_schema(connection)
         cursor = await connection.execute(
             '''
             SELECT
@@ -326,8 +346,8 @@ async def create_submission_with_quota(
     now = _utc_now()
     now_iso = now.isoformat()
 
+    await ensure_runtime_schema()
     async with open_connection() as connection:
-        await ensure_submission_quota_schema(connection)
         await connection.execute("BEGIN IMMEDIATE")
 
         contest_cursor = await connection.execute(
@@ -584,14 +604,20 @@ async def fail_submission_with_error(submission_id: str, message: str) -> None:
 
 
 async def fetch_leaderboard_rows(contest_id: str | None) -> list[dict[str, Any]]:
+    """Best graded score per user/contest plus total submission count for that contest only."""
     query = '''
         SELECT
           s."userId",
           u."name" AS "userName",
           s."contestId",
           c."title" AS "contestTitle",
-          s."score",
-          s."createdAt"
+          MAX(s."score") AS "score",
+          (
+            SELECT COUNT(*)
+            FROM "Submission" sc
+            WHERE sc."userId" = s."userId"
+              AND sc."contestId" = s."contestId"
+          ) AS "submissionCount"
         FROM "Submission" s
         JOIN "User" u ON u."id" = s."userId"
         JOIN "Contest" c ON c."id" = s."contestId"
@@ -602,7 +628,10 @@ async def fetch_leaderboard_rows(contest_id: str | None) -> list[dict[str, Any]]
         query += ' AND s."contestId" = ?'
         params = (contest_id,)
 
-    query += ' ORDER BY s."createdAt" DESC'
+    query += '''
+        GROUP BY s."userId", s."contestId", u."name", c."title"
+        ORDER BY MAX(s."score") DESC
+    '''
 
     async with open_connection() as connection:
         cursor = await connection.execute(query, params)

@@ -102,38 +102,30 @@ def get_points_from_rank(rank: int) -> int:
 
 
 def build_leaderboard(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    best_scores: dict[str, dict[str, Any]] = {}
+    """Rank leaderboard entries (one row per user per contest from SQL aggregation)."""
+    aggregated: dict[tuple[str, str], dict[str, Any]] = {}
 
     for row in rows:
-        key = row["userId"]
-        existing = best_scores.get(key)
+        key = (row["userId"], row["contestId"])
         score = float(row["score"])
-        if existing is None or score > existing["score"]:
-            best_scores[key] = {
+        submission_count = int(row.get("submissionCount") or 0)
+        existing = aggregated.get(key)
+        if existing is None:
+            aggregated[key] = {
                 "userId": row["userId"],
                 "userName": row["userName"],
                 "contestId": row["contestId"],
                 "contestTitle": row["contestTitle"],
                 "score": score,
-                "submissionCount": (existing["submissionCount"] + 1) if existing else 1,
+                "submissionCount": submission_count,
             }
+            continue
 
-    with_points = [
-        {
-            "rank": index + 1,
-            "recordPoints": get_points_from_rank(index + 1),
-            **entry,
-        }
-        for index, entry in enumerate(
-            sorted(best_scores.values(), key=lambda entry: entry["score"], reverse=True)
-        )
-    ]
+        existing["submissionCount"] = max(existing["submissionCount"], submission_count)
+        if score > existing["score"]:
+            existing["score"] = score
 
-    leaderboard = sorted(
-        with_points,
-        key=lambda entry: (entry["recordPoints"], entry["score"]),
-        reverse=True,
-    )
+    ranked = sorted(aggregated.values(), key=lambda entry: entry["score"], reverse=True)
 
     return [
         {
@@ -141,5 +133,5 @@ def build_leaderboard(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
             "rank": index + 1,
             "recordPoints": get_points_from_rank(index + 1),
         }
-        for index, entry in enumerate(leaderboard)
+        for index, entry in enumerate(ranked)
     ]
