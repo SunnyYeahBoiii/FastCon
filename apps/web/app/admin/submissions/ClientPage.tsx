@@ -122,6 +122,61 @@ export default function SubmissionsPage() {
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
+  useEffect(() => {
+    let active = true;
+    const eventSource = new EventSource("/cs116.khtn/api/submissions/stream?scope=admin");
+
+    eventSource.onmessage = (event) => {
+      if (!active) {
+        return;
+      }
+
+      const data = JSON.parse(event.data);
+      if (data.type !== "initial" && data.type !== "update") {
+        return;
+      }
+
+      const nextSubmissions: Submission[] = data.submissions || [];
+      setSubmissions(nextSubmissions);
+      setDetail((current) => {
+        if (!current) {
+          return current;
+        }
+
+        const updated = nextSubmissions.find((submission) => submission.id === current.id);
+        if (!updated) {
+          return current;
+        }
+
+        return {
+          ...current,
+          filename: updated.filename,
+          status: updated.status,
+          score: updated.score,
+          metrics: updated.metrics,
+          createdAt: updated.createdAt,
+          user: {
+            name: updated.user.name,
+            username: updated.user.username,
+          },
+          contest: {
+            title: updated.contest.title,
+          },
+        };
+      });
+      setLoading(false);
+    };
+
+    eventSource.onerror = () => {
+      eventSource.close();
+    };
+
+    return () => {
+      active = false;
+      eventSource.close();
+    };
+  }, []);
+
   const handleViewDetail = async (id: string) => {
     const res = await fetch(`/cs116.khtn/api/submissions/${id}`);
     const data = await res.json();

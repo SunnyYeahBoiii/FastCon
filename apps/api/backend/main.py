@@ -200,8 +200,62 @@ async def submission_quota(
 @app.get("/api/submissions/stream")
 async def submission_stream(
     request: Request,
+    scope: str | None = Query(None),
     current_user: dict = Depends(get_current_user),
 ):
+    if scope == "admin":
+        if current_user["role"] != "admin":
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
+
+        initial_rows = await repositories.fetch_admin_submissions()
+        initial_payload = [schemas.admin_submission_payload(row) for row in initial_rows]
+        last_serialized = json.dumps(initial_payload, sort_keys=True, separators=(",", ":"))
+
+        async def admin_event_generator():
+            nonlocal last_serialized
+            started_at = asyncio.get_running_loop().time()
+            heartbeat_deadline = started_at + 15
+            yield default_event({"type": "initial", "submissions": initial_payload})
+
+            while True:
+                if await request.is_disconnected():
+                    break
+
+                now = asyncio.get_running_loop().time()
+                if now - started_at >= 55:
+                    break
+
+                sleep_for = max(0.1, min(2, heartbeat_deadline - now, started_at + 55 - now))
+                await asyncio.sleep(sleep_for)
+
+                if await request.is_disconnected():
+                    break
+
+                updated_rows = await repositories.fetch_admin_submissions()
+                updated = [schemas.admin_submission_payload(row) for row in updated_rows]
+                serialized = json.dumps(updated, sort_keys=True, separators=(",", ":"))
+                if serialized != last_serialized:
+                    last_serialized = serialized
+                    yield default_event({"type": "update", "submissions": updated})
+
+                now = asyncio.get_running_loop().time()
+                if now >= heartbeat_deadline:
+                    yield ": keep-alive\n\n"
+                    heartbeat_deadline = now + 15
+
+            if not await request.is_disconnected():
+                yield default_event({"type": "close"})
+
+        return StreamingResponse(
+            admin_event_generator(),
+            media_type="text/event-stream",
+            headers={
+                "Cache-Control": "no-cache, no-transform",
+                "Connection": "keep-alive",
+                "X-Accel-Buffering": "no",
+            },
+        )
+
     user_id = current_user["id"]
     initial_rows = await repositories.fetch_user_submissions(user_id, limit=20)
     queue, unsubscribe = await request.app.state.broadcaster.subscribe(user_id)
