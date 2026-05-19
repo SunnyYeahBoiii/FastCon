@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db";
 import { requireAdminApi } from "@/lib/guard";
 import {
   buildSubmissionQuotaSnapshot,
+  isSubmissionInQuotaWindow,
   isQuotaDebited,
 } from "@/lib/submissionQuota";
 
@@ -61,7 +62,10 @@ async function fetchContestQuotaEntries(contestId: string) {
             (submission) =>
               submission.userId === user.id &&
               isQuotaDebited(submission.quotaUsageState) &&
-              submission.createdAt >= quotaWindow.windowStartedAt
+              isSubmissionInQuotaWindow(
+                submission.createdAt,
+                quotaWindow.windowStartedAt
+              )
           ).length
         : 0;
 

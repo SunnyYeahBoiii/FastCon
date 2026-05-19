@@ -3,6 +3,7 @@ import test from "node:test";
 
 import {
   buildSubmissionQuotaSnapshot,
+  isSubmissionInQuotaWindow,
   isQuotaDebited,
   QUOTA_USAGE_COUNTED,
   QUOTA_USAGE_PENDING,
@@ -14,6 +15,23 @@ test("quota debit states count pending and counted only", () => {
   assert.equal(isQuotaDebited(QUOTA_USAGE_COUNTED), true);
   assert.equal(isQuotaDebited(QUOTA_USAGE_REFUNDED), false);
   assert.equal(isQuotaDebited("failed"), false);
+});
+
+test("quota window comparison matches sqlite second precision", () => {
+  assert.equal(
+    isSubmissionInQuotaWindow(
+      new Date("2026-04-22T12:53:56.000Z"),
+      new Date("2026-04-22T12:53:56.832Z")
+    ),
+    true
+  );
+  assert.equal(
+    isSubmissionInQuotaWindow(
+      new Date("2026-04-22T12:53:55.999Z"),
+      new Date("2026-04-22T12:53:56.000Z")
+    ),
+    false
+  );
 });
 
 test("active quota snapshot keeps used count until reset", () => {

@@ -37,6 +37,13 @@ function quotaLabel(quota: SubmissionQuotaSnapshot) {
   return `${quota.used}/${quota.dailySubmissionLimit ?? 0}`;
 }
 
+function remainingQuotaLabel(entry: QuotaEntry | null, loading: boolean) {
+  if (loading) return "...";
+  if (!entry) return "Chưa có";
+  if (!entry.quota.isLimited) return "Không giới hạn";
+  return `${entry.quota.remaining ?? 0} lượt`;
+}
+
 export default function QuotaResetSection({ contestId }: QuotaResetSectionProps) {
   const [entries, setEntries] = useState<QuotaEntry[]>([]);
   const [selectedUserId, setSelectedUserId] = useState("");
@@ -176,7 +183,7 @@ export default function QuotaResetSection({ contestId }: QuotaResetSectionProps)
         <div className="rounded-lg bg-surface-container-highest p-4">
           <div className="text-xs font-medium text-on-surface-variant mb-1">Còn lại</div>
           <div className="text-xl font-semibold text-on-surface">
-            {selectedEntry?.quota.remaining ?? "Không giới hạn"}
+            {remainingQuotaLabel(selectedEntry, loading)}
           </div>
         </div>
         <div className="rounded-lg bg-surface-container-highest p-4">

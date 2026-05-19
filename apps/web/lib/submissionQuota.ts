@@ -28,6 +28,24 @@ function normalizeLimit(limit: number | null | undefined) {
   return typeof limit === "number" && limit > 0 ? limit : null;
 }
 
+function timestampSecond(value: Date | string) {
+  const timestamp = value instanceof Date ? value.getTime() : new Date(value).getTime();
+  return Number.isFinite(timestamp) ? Math.floor(timestamp / 1000) : null;
+}
+
+export function isSubmissionInQuotaWindow(
+  submissionCreatedAt: Date | string,
+  windowStartedAt: Date | string
+) {
+  const submissionSecond = timestampSecond(submissionCreatedAt);
+  const windowSecond = timestampSecond(windowStartedAt);
+  return (
+    submissionSecond !== null &&
+    windowSecond !== null &&
+    submissionSecond >= windowSecond
+  );
+}
+
 export function buildSubmissionQuotaSnapshot({
   contestId,
   dailySubmissionLimit,
