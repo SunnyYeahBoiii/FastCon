@@ -237,22 +237,22 @@ cd "$ROOT_DIR"
 wait_for_http "FastAPI" "http://127.0.0.1:8010/docs" "$API_PID" 30
 echo ""
 
-step "Starting Next.js (port 3000)..."
+step "Starting Next.js (port 4010)..."
 set -a
 source "$WEB_DIR/.env.local"
 set +a
 cd "$WEB_DIR"
-"$ROOT_DIR/node_modules/.bin/next" start --port 3000 &
+"$ROOT_DIR/node_modules/.bin/next" start --port 4010 &
 WEB_PID=$!
 cd "$ROOT_DIR"
-wait_for_http "Next.js" "http://127.0.0.1:3000" "$WEB_PID" 30
+wait_for_http "Next.js" "http://127.0.0.1:4010" "$WEB_PID" 30
 echo ""
 
 echo "========================================"
 echo "  Application Running"
 echo "========================================"
 echo ""
-echo "  Web:  http://localhost:3000"
+echo "  Web:  http://localhost:4010"
 echo "  API:  http://127.0.0.1:8010"
 echo "  Docs: http://127.0.0.1:8010/docs"
 echo ""
