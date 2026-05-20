@@ -26,18 +26,39 @@ export default function LeaderboardPage() {
   const [filter, setFilter] = useState<"all" | "top10">("all");
   const [contests, setContests] = useState<Contest[]>([]);
   const [selectedContest, setSelectedContest] = useState<string>("");
+  const [contestsLoaded, setContestsLoaded] = useState(false);
 
   // Fetch contests list
   useEffect(() => {
     fetch("/cs116.khtn/api/public/contests")
       .then((r) => r.json())
-      .then((data) => setContests(data.contests || []))
-      .catch(console.error);
+      .then((data) => {
+        const nextContests: Contest[] = data.contests || [];
+        setContests(nextContests);
+        setSelectedContest((current) => {
+          if (current && nextContests.some((contest) => contest.id === current)) {
+            return current;
+          }
+          return nextContests[0]?.id ?? "";
+        });
+      })
+      .catch(console.error)
+      .finally(() => setContestsLoaded(true));
   }, []);
 
-  const queryParams = selectedContest ? `?contestId=${selectedContest}` : "";
+  const queryParams = `?contestId=${encodeURIComponent(selectedContest)}`;
 
   useEffect(() => {
+    if (!contestsLoaded) {
+      return;
+    }
+
+    if (!selectedContest) {
+      setLeaderboard([]);
+      setLoading(false);
+      return;
+    }
+
     let active = true;
     const controller = new AbortController();
 
@@ -90,7 +111,7 @@ export default function LeaderboardPage() {
       controller.abort();
       eventSource.close();
     };
-  }, [selectedContest, queryParams]);
+  }, [contestsLoaded, selectedContest, queryParams]);
 
   const filteredLeaderboard = leaderboard
     .filter((entry) =>
@@ -102,7 +123,7 @@ export default function LeaderboardPage() {
     return rank % 2 === 0 ? "bg-surface" : "";
   };
 
-  const showContestColumn = !selectedContest;
+  const showContestColumn = false;
 
   if (loading) {
     return (
@@ -156,7 +177,6 @@ export default function LeaderboardPage() {
             onChange={(e) => setSelectedContest(e.target.value)}
             className="px-4 py-1.5 bg-surface-container-highest text-on-surface rounded text-sm font-medium border-none focus:ring-0 focus:border-b-2 focus:border-b-primary transition-colors"
           >
-            <option value="">Tất cả cuộc thi</option>
             {contests.map((c) => (
               <option key={c.id} value={c.id}>
                 {c.title}
