@@ -88,8 +88,8 @@ Variables currently written by setup:
 | --- | --- |
 | `DATABASE_URL` | SQLite database file used by both apps |
 | `STORAGE_ROOT` | Shared storage root |
-| `FASTAPI_INTERNAL_URL` | Internal rewrite target used by the web app |
-| `NEXT_PUBLIC_FASTAPI_PUBLIC_URL` | Optional browser-facing FastAPI base URL/path for direct large uploads |
+| `FASTAPI_INTERNAL_URL` | Internal FastAPI target used by Next.js submission proxy routes and leaderboard rewrites |
+| `NEXT_PUBLIC_FASTAPI_PUBLIC_URL` | Optional browser-facing FastAPI base URL/path for direct API access |
 | `PYTHON_BIN` | Python interpreter inside `.venv` |
 | `WORKER_POLL_MS` | Poll interval for the FastAPI submission worker |
 | `WORKER_MAX_CONCURRENT` | Maximum concurrent judge jobs |
@@ -179,9 +179,9 @@ The setup process writes both apps against the same local state:
 
 The split is important operationally:
 
-- Next.js handles public pages, auth/session cookies, admin CRUD flows, and Prisma-based database access.
-- FastAPI handles submission uploads, leaderboard/submission streaming, queueing, worker orchestration, and judge execution.
-- Requests to `/api/submissions/*` and `/api/leaderboard/*` are rewritten from the web app to the internal API using `FASTAPI_INTERNAL_URL` unless the browser is configured with `NEXT_PUBLIC_FASTAPI_PUBLIC_URL` for direct FastAPI access.
+- Next.js handles public pages, auth/session cookies, admin CRUD flows, Prisma-based database access, and the streaming submission proxy.
+- FastAPI handles submission upload state, chunk assembly, leaderboard/submission streaming, queueing, worker orchestration, and judge execution.
+- Requests to `/api/submissions/*` enter a Next.js Route Handler that streams request bodies to FastAPI using `FASTAPI_INTERNAL_URL`. Requests to `/api/leaderboard/*` are still rewritten from middleware to the internal API.
 
 ## Default Admin Account
 

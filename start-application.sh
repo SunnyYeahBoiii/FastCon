@@ -188,19 +188,24 @@ info "npm: $(npm --version)"
 echo ""
 
 step "Checking first-run artifacts..."
-require_dir "$ROOT_DIR/node_modules" "Node dependencies are missing."
 require_executable "$VENV_DIR/bin/python3" "Python virtual environment is missing."
 require_file "$WEB_DIR/.env.local" "Web environment file is missing."
 require_file "$API_DIR/.env.local" "API environment file is missing."
-require_executable "$ROOT_DIR/node_modules/.bin/prisma" "Prisma executable is missing."
-require_executable "$ROOT_DIR/node_modules/.bin/next" "Next.js executable is missing."
-require_file "$WEB_DIR/.next/BUILD_ID" "Next.js production build is missing."
 if ! python_meets_minimum "$VENV_DIR/bin/python3"; then
     error "Python virtual environment must use Python >= ${PYTHON_MIN_MAJOR}.${PYTHON_MIN_MINOR}."
     error "Run ./first-run.sh with a supported PYTHON_BIN to recreate setup artifacts."
     exit 1
 fi
 info "Required artifacts found"
+echo ""
+
+step "Installing Node dependencies..."
+cd "$ROOT_DIR"
+npm install
+require_dir "$ROOT_DIR/node_modules" "Node dependencies are missing."
+require_executable "$ROOT_DIR/node_modules/.bin/prisma" "Prisma executable is missing."
+require_executable "$ROOT_DIR/node_modules/.bin/next" "Next.js executable is missing."
+info "Node dependencies installed"
 echo ""
 
 step "Generating Prisma client..."
@@ -214,6 +219,13 @@ step "Syncing database schema..."
 cd "$ROOT_DIR"
 npm run db:push
 info "Database schema synced"
+echo ""
+
+step "Building workspace..."
+cd "$ROOT_DIR"
+npm run build
+require_file "$WEB_DIR/.next/BUILD_ID" "Next.js production build is missing."
+info "Workspace built"
 echo ""
 
 step "Activating Python virtual environment..."

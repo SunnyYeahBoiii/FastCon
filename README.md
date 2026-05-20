@@ -49,28 +49,32 @@ These routes are handled inside `apps/web` and usually talk to SQLite through Pr
 
 In this path, the browser calls a Next.js route handler or loads a Next.js page, and the handler uses Prisma's SQLite datasource to access the shared database.
 
-#### 2. Rewritten FastAPI path
+#### 2. Proxied FastAPI path
 
-These routes are matched by `apps/web/middleware.ts` and rewritten from Next.js to the internal FastAPI service:
+Submission routes are handled by a Next.js Route Handler that streams requests to FastAPI using `FASTAPI_INTERNAL_URL`:
 
 - `/api/submissions/*`
+
+Leaderboard routes are matched by `apps/web/middleware.ts` and rewritten from Next.js to the internal FastAPI service:
+
 - `/api/leaderboard/*`
 
-In this path, the browser talks to the same web origin by default, and Next.js rewrites the request to the FastAPI service using `FASTAPI_INTERNAL_URL`. For large submission uploads, deployments can set `NEXT_PUBLIC_FASTAPI_PUBLIC_URL` to a browser-reachable FastAPI origin/path so the upload request bypasses the Next.js middleware hop.
+In this path, the browser talks to the same web origin by default. Submission upload requests enter a Node.js Route Handler so chunk bodies can be forwarded to FastAPI without parsing or buffering them in Next.js.
 
 ### Submission lifecycle
 
 The end-to-end submission pipeline works like this:
 
 1. A logged-in user selects a `.pkl` file through the web app.
-2. The web app sends a small init request so FastAPI validates contest state and reserves quota before file bytes are uploaded.
-3. The browser uploads the raw file body to FastAPI, which streams it into a `.part` file under `storage/submissions` and atomically renames it when complete.
-4. FastAPI marks the `Submission` row as `queued`.
-5. The FastAPI worker loop claims queued submissions up to `WORKER_MAX_CONCURRENT`.
-6. The worker launches `apps/api/scripts/judge_runner.py` as a subprocess using the configured Python interpreter.
-7. The judge writes results back to SQLite.
-7. FastAPI publishes updates to in-memory subscriber queues.
-8. Browsers receive live updates through SSE streams for submissions and leaderboard changes.
+2. The web app sends a small init request through Next.js so FastAPI validates contest state, records expected upload size, and reserves quota before file bytes are uploaded.
+3. The browser uploads the file in chunks through Next.js. Next.js streams each chunk to FastAPI, which appends it to a `.part` file under `storage/submissions`.
+4. If an upload is interrupted, the browser can query the server offset and resume from the last accepted byte.
+5. When all bytes are received, FastAPI atomically renames the `.part` file and marks the `Submission` row as `queued`.
+6. The FastAPI worker loop claims queued submissions up to `WORKER_MAX_CONCURRENT`.
+7. The worker launches `apps/api/scripts/judge_runner.py` as a subprocess using the configured Python interpreter.
+8. The judge writes results back to SQLite.
+9. FastAPI publishes updates to in-memory subscriber queues.
+10. Browsers receive live updates through SSE streams for submissions and leaderboard changes.
 
 ### Shared state
 
@@ -219,8 +223,8 @@ The most important variables are:
 
 - `DATABASE_URL`: SQLite file used by both apps
 - `STORAGE_ROOT`: shared storage directory
-- `FASTAPI_INTERNAL_URL`: rewrite target for submission and leaderboard APIs
-- `NEXT_PUBLIC_FASTAPI_PUBLIC_URL`: optional browser-facing FastAPI base URL/path for direct large uploads
+- `FASTAPI_INTERNAL_URL`: internal target used by Next.js submission proxy routes and leaderboard rewrites
+- `NEXT_PUBLIC_FASTAPI_PUBLIC_URL`: optional browser-facing FastAPI base URL/path for direct API access
 - `PYTHON_BIN`: Python interpreter used by the API and judge
 - `WORKER_POLL_MS`: worker wake-up interval
 - `WORKER_MAX_CONCURRENT`: max number of concurrent judge jobs
