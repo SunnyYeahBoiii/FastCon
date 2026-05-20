@@ -66,21 +66,23 @@ export default function LeaderboardPage() {
 
     void loadLeaderboard();
 
-    const eventSource = new EventSource(`/cs116.khtn/api/leaderboard/stream${queryParams}`);
+    const eventSource = new globalThis.EventSource(
+      `/cs116.khtn/api/leaderboard/stream${queryParams}`
+    );
 
     eventSource.onmessage = (event) => {
       if (!active) {
         return;
       }
-      const data = JSON.parse(event.data);
-      if (data.type === "initial" || data.type === "update") {
-        setLeaderboard(data.leaderboard ?? []);
-        setLoading(false);
+      try {
+        const data = JSON.parse(event.data);
+        if (data.type === "initial" || data.type === "update") {
+          setLeaderboard(data.leaderboard ?? []);
+          setLoading(false);
+        }
+      } catch (error) {
+        console.error("Leaderboard stream event error:", error);
       }
-    };
-
-    eventSource.onerror = () => {
-      eventSource.close();
     };
 
     return () => {

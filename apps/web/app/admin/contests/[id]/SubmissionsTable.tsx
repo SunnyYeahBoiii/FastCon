@@ -1,6 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+
+declare const process: {
+  env: {
+    NEXT_PUBLIC_FASTAPI_PUBLIC_URL?: string;
+  };
+};
 
 interface Submission {
   id: string;
@@ -18,6 +24,14 @@ interface SubmissionsTableProps {
   submissions: Submission[];
 }
 
+const API_BASE_URL =
+  process.env.NEXT_PUBLIC_FASTAPI_PUBLIC_URL?.replace(/\/$/, "") || "/cs116.khtn";
+const PAGE_SIZE = 10;
+
+function apiUrl(path: string) {
+  return `${API_BASE_URL}${path}`;
+}
+
 function formatDate(dateStr: string) {
   return new Date(dateStr).toLocaleDateString("vi-VN", {
     hour: "2-digit",
@@ -28,13 +42,56 @@ function formatDate(dateStr: string) {
 export default function SubmissionsTable({ submissions }: SubmissionsTableProps) {
   const [currentPage, setCurrentPage] = useState(1);
   const [selectedSubmission, setSelectedSubmission] = useState<Submission | null>(null);
-  const pageSize = 10;
-  const totalPages = Math.ceil(submissions.length / pageSize);
+  const [liveSubmissions, setLiveSubmissions] = useState(submissions);
+  const selectedSubmissionId = selectedSubmission?.id;
+  const totalPages = Math.max(1, Math.ceil(liveSubmissions.length / PAGE_SIZE));
 
-  const paginatedSubmissions = submissions.slice(
-    (currentPage - 1) * pageSize,
-    currentPage * pageSize
+  const paginatedSubmissions = liveSubmissions.slice(
+    (currentPage - 1) * PAGE_SIZE,
+    currentPage * PAGE_SIZE
   );
+
+  useEffect(() => {
+    setLiveSubmissions(submissions);
+  }, [submissions]);
+
+  useEffect(() => {
+    if (!selectedSubmissionId) {
+      return;
+    }
+
+    const nextSelectedSubmission = liveSubmissions.find(
+      (submission) => submission.id === selectedSubmissionId
+    );
+    if (nextSelectedSubmission) {
+      setSelectedSubmission(nextSelectedSubmission);
+    }
+  }, [liveSubmissions, selectedSubmissionId]);
+
+  useEffect(() => {
+    const eventSource = new globalThis.EventSource(apiUrl("/api/submissions/stream?scope=admin"), {
+      withCredentials: true,
+    });
+
+    eventSource.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        if (data.type !== "initial" && data.type !== "update") {
+          return;
+        }
+
+        const nextSubmissions = Array.isArray(data.submissions) ? data.submissions : [];
+        setLiveSubmissions(nextSubmissions);
+        setCurrentPage((page) =>
+          Math.min(page, Math.max(1, Math.ceil(nextSubmissions.length / PAGE_SIZE)))
+        );
+      } catch (error) {
+        console.error("Admin submission stream event error:", error);
+      }
+    };
+
+    return () => eventSource.close();
+  }, []);
 
   const formatStatus = (status: string) => {
     const statusMap: Record<string, { label: string; class: string }> = {
@@ -60,7 +117,7 @@ const getErrorInfo = (metrics: string | null): { error: string | null; metrics: 
     }
   };
 
-  if (submissions.length === 0) {
+  if (liveSubmissions.length === 0) {
     return (
       <div className="bg-surface-container-lowest rounded-xl shadow-[0_4px_24px_rgba(25,28,30,0.04)] p-6">
         <h2 className="text-lg font-bold text-on-surface mb-4">
@@ -84,7 +141,7 @@ const getErrorInfo = (metrics: string | null): { error: string | null; metrics: 
             <span className="material-symbols-outlined inline-block mr-2" style={{ fontVariationSettings: "'FILL' 1" }}>
               assignment
             </span>
-            Bài nộp ({submissions.length})
+            Bài nộp ({liveSubmissions.length})
           </h2>
         </div>
 
@@ -146,7 +203,7 @@ const getErrorInfo = (metrics: string | null): { error: string | null; metrics: 
         {/* Pagination */}
         <div className="bg-surface-container-lowest px-6 py-4 flex items-center justify-between border-t border-outline-variant/15">
           <span className="text-sm text-on-surface-variant">
-            Hiển thị {(currentPage - 1) * pageSize + 1}-{Math.min(currentPage * pageSize, submissions.length)} của {submissions.length} bài nộp
+            Hiển thị {(currentPage - 1) * PAGE_SIZE + 1}-{Math.min(currentPage * PAGE_SIZE, liveSubmissions.length)} của {liveSubmissions.length} bài nộp
           </span>
           <div className="flex items-center gap-2">
             <button

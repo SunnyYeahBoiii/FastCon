@@ -9,6 +9,8 @@ import {
   useState,
 } from "react";
 import { Upload, Send, ChevronDown, CheckCircle, Clock, AlertCircle } from "lucide-react";
+import { mergeSubmissionStatusUpdate } from "@/lib/submissionRealtime";
+import { uploadSubmissionFileWithFlow } from "./flowUpload";
 
 declare const process: {
   env: {
@@ -57,13 +59,18 @@ interface SubmissionQuota {
 
 interface SubmissionUploadResponse {
   code?: string;
+  complete?: boolean;
   error?: string;
+  bytesWritten?: number;
   submissionId?: string;
+  uploadOffset?: number;
+  uploadTotalBytes?: number | null;
   quota?: SubmissionQuota | null;
 }
 
 const API_BASE_URL =
   process.env.NEXT_PUBLIC_FASTAPI_PUBLIC_URL?.replace(/\/$/, "") || "/cs116.khtn";
+const UPLOAD_STORAGE_PREFIX = "fast-con:submission-upload:flowjs:v1";
 
 function apiUrl(path: string) {
   return `${API_BASE_URL}${path}`;
@@ -100,6 +107,7 @@ export default function SubmitPage({
   const [serverTimeOffsetMs, setServerTimeOffsetMs] = useState(0);
   const [nowMs, setNowMs] = useState(0);
   const [hasMounted, setHasMounted] = useState(false);
+  const knownSubmissionIdsRef = useRef<Set<string>>(new Set());
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -201,6 +209,10 @@ export default function SubmitPage({
   }, [fetchMySubmissions]);
 
   useEffect(() => {
+    knownSubmissionIdsRef.current = new Set(mySubmissions.map((submission) => submission.id));
+  }, [mySubmissions]);
+
+  useEffect(() => {
     if (!selectedContest) {
       setSelectedContestQuota(null);
       setQuotaError(null);
@@ -234,37 +246,47 @@ export default function SubmitPage({
   }, [selectedContest, selectedContestQuota?.resetAt, fetchQuota]);
 
   useEffect(() => {
-    const eventSource = new EventSource(apiUrl("/api/submissions/stream"), {
+    const eventSource = new globalThis.EventSource(apiUrl("/api/submissions/stream"), {
       withCredentials: true,
     });
 
     eventSource.addEventListener("initial", (event) => {
-      const data = JSON.parse(event.data);
-      setMySubmissions(data.submissions || []);
+      try {
+        const data = JSON.parse(event.data);
+        setMySubmissions(data.submissions || []);
+      } catch (error) {
+        console.error("Submission stream initial event error:", error);
+      }
     });
 
     eventSource.addEventListener("update", (event) => {
-      const { submissionId, status, score, metrics } = JSON.parse(event.data);
-      setMySubmissions((prev) =>
-        prev.map((sub) =>
-          sub.id === submissionId
-            ? { ...sub, status, score: score ?? sub.score, metrics: metrics ?? sub.metrics }
-            : sub
-        )
-      );
+      try {
+        const update = JSON.parse(event.data);
+        if (typeof update.submissionId !== "string") {
+          return;
+        }
+        if (!knownSubmissionIdsRef.current.has(update.submissionId)) {
+          fetchMySubmissions();
+          return;
+        }
+
+        setMySubmissions((prev) => mergeSubmissionStatusUpdate(prev, update).submissions);
+      } catch (error) {
+        console.error("Submission stream update event error:", error);
+      }
     });
 
     eventSource.addEventListener("poll_update", (event) => {
-      const data = JSON.parse(event.data);
-      setMySubmissions(data.submissions || []);
+      try {
+        const data = JSON.parse(event.data);
+        setMySubmissions(data.submissions || []);
+      } catch (error) {
+        console.error("Submission stream poll event error:", error);
+      }
     });
 
-    eventSource.onerror = () => {
-      eventSource.close();
-    };
-
     return () => eventSource.close();
-  }, []);
+  }, [fetchMySubmissions]);
 
   const openContests = contests.filter((contest) => contest.isOpenForSubmission);
   const closedContests = contests.filter((contest) => !contest.isOpenForSubmission);
@@ -305,6 +327,13 @@ export default function SubmitPage({
       return;
     }
 
+    if (file.size <= 0) {
+      setSelectedFile(null);
+      e.target.value = "";
+      setSubmitError("File nộp bài không được rỗng");
+      return;
+    }
+
     setSelectedFile(file);
   };
 
@@ -338,40 +367,58 @@ export default function SubmitPage({
     let pendingSubmissionId: string | null = null;
 
     try {
-      const initResponse = await fetch(apiUrl("/api/submissions/init"), {
-        method: "POST",
-        credentials: "include",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          contestId: selectedContest,
-          filename: selectedFile.name,
-        }),
-      });
-      const initData = await readJsonResponse<SubmissionUploadResponse>(initResponse);
+      const resumableUpload = await findResumableSubmissionUpload(
+        selectedContest,
+        selectedFile
+      );
+      let submissionId: string;
 
-      if (!initResponse.ok || !initData?.submissionId) {
-        if (initData?.quota) {
+      if (resumableUpload) {
+        pendingSubmissionId = resumableUpload.submissionId;
+        submissionId = resumableUpload.submissionId;
+      } else {
+        const initResponse = await fetch(apiUrl("/api/submissions/init"), {
+          method: "POST",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            contestId: selectedContest,
+            filename: selectedFile.name,
+            totalBytes: selectedFile.size,
+          }),
+        });
+        const initData = await readJsonResponse<SubmissionUploadResponse>(initResponse);
+
+        if (!initResponse.ok || !initData?.submissionId) {
+          if (initData?.quota) {
+            setSelectedContestQuota(initData.quota);
+          }
+          handleSubmissionError(initData, fetchContests, setSubmitError);
+          return;
+        }
+
+        pendingSubmissionId = initData.submissionId;
+        submissionId = initData.submissionId;
+        rememberSubmissionUpload(selectedContest, selectedFile, initData.submissionId);
+        if (initData.quota) {
           setSelectedContestQuota(initData.quota);
         }
-        handleSubmissionError(initData, fetchContests, setSubmitError);
-        return;
       }
 
-      pendingSubmissionId = initData.submissionId;
-      if (initData.quota) {
-        setSelectedContestQuota(initData.quota);
-      }
-
-      const uploadResult = await uploadSubmissionFile(
-        apiUrl(`/api/submissions/${encodeURIComponent(initData.submissionId)}/file`),
-        selectedFile,
-        setUploadProgress
-      );
+      const encodedSubmissionId = encodeURIComponent(submissionId);
+      const uploadResult = await uploadSubmissionFileWithFlow<SubmissionQuota>({
+        completeUrl: apiUrl(`/api/submissions/${encodedSubmissionId}/flow-complete`),
+        contestId: selectedContest,
+        file: selectedFile,
+        onProgress: setUploadProgress,
+        targetUrl: apiUrl(`/api/submissions/${encodedSubmissionId}/flow-chunks`),
+      });
       const data = uploadResult.data;
 
       if (uploadResult.ok) {
         setSubmitNotice("Bài nộp đã được nhận và đưa vào hàng chờ chấm.");
         setSelectedFile(null);
+        forgetSubmissionUpload(selectedContest, selectedFile);
         if (data?.quota) {
           setSelectedContestQuota(data.quota);
         }
@@ -388,14 +435,12 @@ export default function SubmitPage({
       }
     } catch (error) {
       console.error("Submission error:", error);
-      if (pendingSubmissionId) {
-        await fetch(apiUrl(`/api/submissions/${encodeURIComponent(pendingSubmissionId)}/upload`), {
-          method: "DELETE",
-          credentials: "include",
-        }).catch(console.error);
-      }
       void fetchQuota(selectedContest);
-      setSubmitError("Nộp bài thất bại. Vui lòng thử lại.");
+      setSubmitError(
+        pendingSubmissionId
+          ? "Upload bị gián đoạn. Chọn lại cùng file và bấm Submit để tiếp tục."
+          : "Nộp bài thất bại. Vui lòng thử lại."
+      );
     } finally {
       setIsSubmitting(false);
       setUploadProgress(null);
@@ -860,41 +905,109 @@ async function readJsonResponse<T>(response: Response): Promise<T | null> {
   }
 }
 
-function uploadSubmissionFile(
-  url: string,
-  file: File,
-  onProgress: Dispatch<SetStateAction<number | null>>
-): Promise<{ ok: boolean; data: SubmissionUploadResponse | null }> {
-  return new Promise((resolve, reject) => {
-    const request = new XMLHttpRequest();
-    request.open("PUT", url);
-    request.withCredentials = true;
-    request.setRequestHeader("Content-Type", "application/octet-stream");
+interface StoredSubmissionUpload {
+  contestId: string;
+  filename: string;
+  lastModified: number;
+  size: number;
+  submissionId: string;
+}
 
-    request.upload.onprogress = (event) => {
-      if (!event.lengthComputable || event.total === 0) {
-        return;
-      }
-      onProgress(Math.min(99, Math.round((event.loaded / event.total) * 100)));
-    };
+interface ResumableSubmissionUpload {
+  submissionId: string;
+}
 
-    request.onload = () => {
-      onProgress(100);
-      let data: SubmissionUploadResponse | null = null;
-      if (request.responseText) {
-        try {
-          data = JSON.parse(request.responseText) as SubmissionUploadResponse;
-        } catch {
-          data = { error: request.responseText.slice(0, 200) || request.statusText };
-        }
-      }
-      resolve({ ok: request.status >= 200 && request.status < 300, data });
-    };
+function uploadStorageKey(contestId: string, file: File) {
+  return [
+    UPLOAD_STORAGE_PREFIX,
+    contestId,
+    file.name,
+    file.size.toString(),
+    file.lastModified.toString(),
+  ].join(":");
+}
 
-    request.onerror = () => reject(new Error("Upload failed"));
-    request.onabort = () => reject(new Error("Upload canceled"));
-    request.send(file);
-  });
+function readStoredSubmissionUpload(
+  contestId: string,
+  file: File
+): StoredSubmissionUpload | null {
+  if (typeof window === "undefined") return null;
+
+  const raw = window.localStorage.getItem(uploadStorageKey(contestId, file));
+  if (!raw) return null;
+
+  try {
+    const parsed = JSON.parse(raw) as StoredSubmissionUpload;
+    if (
+      parsed.contestId === contestId &&
+      parsed.filename === file.name &&
+      parsed.size === file.size &&
+      parsed.lastModified === file.lastModified &&
+      parsed.submissionId
+    ) {
+      return parsed;
+    }
+  } catch {
+    // Corrupt resume metadata is safe to discard.
+  }
+
+  window.localStorage.removeItem(uploadStorageKey(contestId, file));
+  return null;
+}
+
+function rememberSubmissionUpload(contestId: string, file: File, submissionId: string) {
+  if (typeof window === "undefined") return;
+
+  const stored: StoredSubmissionUpload = {
+    contestId,
+    filename: file.name,
+    lastModified: file.lastModified,
+    size: file.size,
+    submissionId,
+  };
+  window.localStorage.setItem(uploadStorageKey(contestId, file), JSON.stringify(stored));
+}
+
+function forgetSubmissionUpload(contestId: string, file: File) {
+  if (typeof window === "undefined") return;
+  window.localStorage.removeItem(uploadStorageKey(contestId, file));
+}
+
+function parseHeaderInt(value: string | null): number | null {
+  if (value === null) return null;
+  const parsed = Number.parseInt(value, 10);
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : null;
+}
+
+async function findResumableSubmissionUpload(
+  contestId: string,
+  file: File
+): Promise<ResumableSubmissionUpload | null> {
+  const stored = readStoredSubmissionUpload(contestId, file);
+  if (!stored) return null;
+
+  const response = await fetch(
+    apiUrl(`/api/submissions/${encodeURIComponent(stored.submissionId)}/file`),
+    {
+      method: "HEAD",
+      credentials: "include",
+    }
+  );
+
+  if (!response.ok) {
+    forgetSubmissionUpload(contestId, file);
+    return null;
+  }
+
+  const uploadLength = parseHeaderInt(response.headers.get("Upload-Length"));
+  if (uploadLength !== null && uploadLength !== file.size) {
+    forgetSubmissionUpload(contestId, file);
+    return null;
+  }
+
+  return {
+    submissionId: stored.submissionId,
+  };
 }
 
 function handleSubmissionError(

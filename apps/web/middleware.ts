@@ -23,9 +23,7 @@ export function middleware(request: NextRequest) {
 
 export const config = {
   matcher: [
-    "/api/submissions/:path*",
     "/api/leaderboard/:path*",
-    "/cs116.khtn/api/submissions/:path*",
     "/cs116.khtn/api/leaderboard/:path*",
   ],
 };
