@@ -169,6 +169,23 @@ async def _ensure_submission_quota_usage_state_column(
     )
 
 
+async def _ensure_submission_upload_progress_columns(
+    connection: aiosqlite.Connection,
+) -> None:
+    cursor = await connection.execute('PRAGMA table_info("Submission")')
+    columns = {row["name"] for row in await cursor.fetchall()}
+
+    if "uploadTotalBytes" not in columns:
+        await connection.execute(
+            'ALTER TABLE "Submission" ADD COLUMN "uploadTotalBytes" INTEGER'
+        )
+
+    if "uploadReceivedBytes" not in columns:
+        await connection.execute(
+            'ALTER TABLE "Submission" ADD COLUMN "uploadReceivedBytes" INTEGER NOT NULL DEFAULT 0'
+        )
+
+
 async def _count_active_quota_usage(
     connection: aiosqlite.Connection,
     *,
@@ -207,6 +224,7 @@ async def open_connection() -> AsyncIterator[aiosqlite.Connection]:
 
 async def ensure_submission_quota_schema(connection: aiosqlite.Connection) -> None:
     await _ensure_submission_quota_usage_state_column(connection)
+    await _ensure_submission_upload_progress_columns(connection)
     await connection.execute(
         '''
         CREATE TABLE IF NOT EXISTS "SubmissionQuotaWindow" (
@@ -401,6 +419,7 @@ async def create_submission_with_quota(
     filename: str,
     filepath: str,
     initial_status: str = "queued",
+    upload_total_bytes: int | None = None,
 ) -> dict[str, Any]:
     submission_id = _submission_id()
     now = _utc_now()
@@ -568,11 +587,21 @@ async def create_submission_with_quota(
               "filename",
               "filepath",
               "status",
+              "uploadTotalBytes",
+              "uploadReceivedBytes",
               "quotaUsageState"
             )
-            VALUES (?, ?, ?, ?, ?, ?, 'pending')
+            VALUES (?, ?, ?, ?, ?, ?, ?, 0, 'pending')
             ''',
-            (submission_id, user_id, contest_id, filename, filepath, initial_status),
+            (
+                submission_id,
+                user_id,
+                contest_id,
+                filename,
+                filepath,
+                initial_status,
+                upload_total_bytes,
+            ),
         )
         await connection.commit()
     return {"ok": True, "submissionId": submission_id, "quota": quota_snapshot}
@@ -584,6 +613,7 @@ async def prepare_submission_upload_with_quota(
     contest_id: str,
     filename: str,
     filepath: str,
+    upload_total_bytes: int | None = None,
 ) -> dict[str, Any]:
     return await create_submission_with_quota(
         user_id=user_id,
@@ -591,6 +621,7 @@ async def prepare_submission_upload_with_quota(
         filename=filename,
         filepath=filepath,
         initial_status="uploading",
+        upload_total_bytes=upload_total_bytes,
     )
 
 
@@ -602,13 +633,40 @@ async def fetch_pending_submission_upload(
     async with open_connection() as connection:
         cursor = await connection.execute(
             '''
-            SELECT "id", "userId", "contestId", "filename", "filepath", "status"
+            SELECT
+              "id",
+              "userId",
+              "contestId",
+              "filename",
+              "filepath",
+              "status",
+              "uploadTotalBytes",
+              "uploadReceivedBytes"
             FROM "Submission"
             WHERE "id" = ? AND "userId" = ? AND "status" = 'uploading'
             ''',
             (submission_id, user_id),
         )
         return _row_to_dict(await cursor.fetchone())
+
+
+async def update_submission_upload_progress(
+    submission_id: str,
+    *,
+    user_id: str,
+    received_bytes: int,
+) -> bool:
+    async with open_connection() as connection:
+        cursor = await connection.execute(
+            '''
+            UPDATE "Submission"
+            SET "uploadReceivedBytes" = MAX("uploadReceivedBytes", ?)
+            WHERE "id" = ? AND "userId" = ? AND "status" = 'uploading'
+            ''',
+            (received_bytes, submission_id, user_id),
+        )
+        await connection.commit()
+        return cursor.rowcount == 1
 
 
 async def complete_submission_upload(submission_id: str, *, user_id: str) -> bool:

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import shutil
 from contextlib import suppress
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -93,6 +94,11 @@ class SubmissionWorker:
             filepath = Path(upload["filepath"])
             await asyncio.to_thread(filepath.unlink, missing_ok=True)
             await asyncio.to_thread(filepath.with_name(f"{filepath.name}.part").unlink, missing_ok=True)
+            await asyncio.to_thread(
+                shutil.rmtree,
+                filepath.with_name(f"{filepath.name}.parts"),
+                True,
+            )
             await self._broadcaster.publish(
                 upload["userId"],
                 schemas.submission_update_payload(upload, upload["id"], "failed"),

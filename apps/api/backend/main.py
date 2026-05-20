@@ -4,10 +4,12 @@ import asyncio
 import json
 import shutil
 import time
+import uuid
 from contextlib import asynccontextmanager
+from dataclasses import dataclass
 from pathlib import Path
 
-from fastapi import Depends, FastAPI, File, Form, HTTPException, Query, Request, UploadFile, status
+from fastapi import Depends, FastAPI, File, Form, HTTPException, Query, Request, Response, UploadFile, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse, StreamingResponse
 
@@ -45,8 +47,160 @@ def _write_upload_file(file: UploadFile, filepath: Path) -> None:
         raise
 
 
+def _part_path(filepath: Path) -> Path:
+    return filepath.with_name(f"{filepath.name}.part")
+
+
+def _file_size(path: Path) -> int:
+    return path.stat().st_size if path.exists() else 0
+
+
+def _truncate_file(path: Path, size: int) -> None:
+    with path.open("ab") as file:
+        file.truncate(size)
+
+
+@dataclass(frozen=True)
+class FlowChunkParams:
+    chunk_number: int
+    total_chunks: int
+    chunk_size: int
+    total_size: int
+    identifier: str
+    filename: str
+
+
+def _flow_parts_dir(filepath: Path) -> Path:
+    return filepath.with_name(f"{filepath.name}.parts")
+
+
+def _flow_part_path(filepath: Path, chunk_number: int) -> Path:
+    return _flow_parts_dir(filepath) / f"{chunk_number:06d}.part"
+
+
+def _expected_flow_chunk_size(params: FlowChunkParams) -> int:
+    start = (params.chunk_number - 1) * params.chunk_size
+    end = min(start + params.chunk_size, params.total_size)
+    return max(0, end - start)
+
+
+def _validate_flow_chunk_params(params: FlowChunkParams, expected_total_size: int) -> str | None:
+    if params.chunk_number < 1:
+        return "flowChunkNumber must start at 1"
+    if params.total_chunks < 1:
+        return "flowTotalChunks must be positive"
+    if params.chunk_size < 1:
+        return "flowChunkSize must be positive"
+    if params.total_size != expected_total_size:
+        return "flowTotalSize does not match pending upload"
+    if params.chunk_number > params.total_chunks:
+        return "flowChunkNumber exceeds flowTotalChunks"
+    if params.filename and not _safe_submission_filename(params.filename):
+        return "flowFilename must be a .pkl file"
+    expected_chunks = (params.total_size + params.chunk_size - 1) // params.chunk_size
+    if params.total_chunks != expected_chunks:
+        return "flowTotalChunks does not match flowTotalSize and flowChunkSize"
+    if _expected_flow_chunk_size(params) <= 0:
+        return "Chunk is outside upload length"
+    return None
+
+
+def _flow_params_from_values(
+    *,
+    flow_chunk_number: int,
+    flow_total_chunks: int,
+    flow_chunk_size: int,
+    flow_total_size: int,
+    flow_identifier: str,
+    flow_filename: str,
+) -> FlowChunkParams:
+    return FlowChunkParams(
+        chunk_number=flow_chunk_number,
+        total_chunks=flow_total_chunks,
+        chunk_size=flow_chunk_size,
+        total_size=flow_total_size,
+        identifier=flow_identifier,
+        filename=flow_filename,
+    )
+
+
+def _flow_params_for_chunk(params: FlowChunkParams, chunk_number: int) -> FlowChunkParams:
+    return FlowChunkParams(
+        chunk_number=chunk_number,
+        total_chunks=params.total_chunks,
+        chunk_size=params.chunk_size,
+        total_size=params.total_size,
+        identifier=params.identifier,
+        filename=params.filename,
+    )
+
+
+async def _store_flow_chunk(request: Request, filepath: Path, params: FlowChunkParams) -> int:
+    parts_dir = _flow_parts_dir(filepath)
+    await asyncio.to_thread(parts_dir.mkdir, parents=True, exist_ok=True)
+    target_path = _flow_part_path(filepath, params.chunk_number)
+    temp_path = parts_dir / f"{target_path.name}.{uuid.uuid4().hex}.tmp"
+
+    bytes_written = 0
+    destination = None
+    try:
+        destination = await asyncio.to_thread(temp_path.open, "wb")
+        async for chunk in request.stream():
+            if not chunk:
+                continue
+            bytes_written += len(chunk)
+            await asyncio.to_thread(destination.write, chunk)
+        await asyncio.to_thread(destination.close)
+        destination = None
+
+        expected_size = _expected_flow_chunk_size(params)
+        if bytes_written != expected_size:
+            await asyncio.to_thread(temp_path.unlink, missing_ok=True)
+            raise ValueError("Flow chunk size mismatch")
+
+        await asyncio.to_thread(temp_path.replace, target_path)
+        return bytes_written
+    except Exception:
+        if destination is not None:
+            await asyncio.to_thread(destination.close)
+        await asyncio.to_thread(temp_path.unlink, missing_ok=True)
+        raise
+
+
+def _sum_flow_received_bytes(filepath: Path, params: FlowChunkParams) -> int:
+    total = 0
+    for chunk_number in range(1, params.total_chunks + 1):
+        chunk_params = _flow_params_for_chunk(params, chunk_number)
+        part_path = _flow_part_path(filepath, chunk_number)
+        if part_path.exists() and part_path.stat().st_size == _expected_flow_chunk_size(chunk_params):
+            total += _expected_flow_chunk_size(chunk_params)
+    return total
+
+
+def _all_flow_parts_present(filepath: Path, params: FlowChunkParams) -> bool:
+    return _sum_flow_received_bytes(filepath, params) == params.total_size
+
+
+def _merge_flow_parts(filepath: Path, params: FlowChunkParams) -> None:
+    part_filepath = _part_path(filepath)
+    part_filepath.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        with part_filepath.open("wb") as output:
+            for chunk_number in range(1, params.total_chunks + 1):
+                part_path = _flow_part_path(filepath, chunk_number)
+                with part_path.open("rb") as input_file:
+                    shutil.copyfileobj(input_file, output)
+        if part_filepath.stat().st_size != params.total_size:
+            raise ValueError("Merged upload size mismatch")
+        part_filepath.replace(filepath)
+        shutil.rmtree(_flow_parts_dir(filepath), ignore_errors=True)
+    except Exception:
+        part_filepath.unlink(missing_ok=True)
+        raise
+
+
 async def _stream_request_to_file(request: Request, filepath: Path) -> int:
-    part_path = filepath.with_name(f"{filepath.name}.part")
+    part_path = _part_path(filepath)
     bytes_written = 0
     destination = None
     try:
@@ -68,6 +222,75 @@ async def _stream_request_to_file(request: Request, filepath: Path) -> int:
         await asyncio.to_thread(part_path.unlink, missing_ok=True)
         await asyncio.to_thread(filepath.unlink, missing_ok=True)
         raise
+
+
+async def _append_request_to_part_file(
+    request: Request,
+    filepath: Path,
+    *,
+    expected_offset: int,
+) -> int:
+    part_path = _part_path(filepath)
+    await asyncio.to_thread(part_path.parent.mkdir, parents=True, exist_ok=True)
+
+    actual_offset = await asyncio.to_thread(_file_size, part_path)
+    if actual_offset != expected_offset:
+        raise ValueError(
+            f"Part file offset mismatch: expected {expected_offset}, got {actual_offset}"
+        )
+
+    bytes_written = 0
+    destination = None
+    try:
+        destination = await asyncio.to_thread(part_path.open, "ab")
+        async for chunk in request.stream():
+            if not chunk:
+                continue
+            bytes_written += len(chunk)
+            await asyncio.to_thread(destination.write, chunk)
+        await asyncio.to_thread(destination.close)
+        destination = None
+        return bytes_written
+    except Exception:
+        if destination is not None:
+            await asyncio.to_thread(destination.close)
+        await asyncio.to_thread(_truncate_file, part_path, expected_offset)
+        raise
+
+
+async def _finalize_part_file(filepath: Path) -> None:
+    part_path = _part_path(filepath)
+    await asyncio.to_thread(part_path.replace, filepath)
+
+
+def _parse_positive_int(value: str | None) -> int | None:
+    if value is None:
+        return None
+    try:
+        parsed = int(value)
+    except ValueError:
+        return None
+    return parsed if parsed > 0 else None
+
+
+def _parse_non_negative_int(value: str | None) -> int | None:
+    if value is None:
+        return None
+    try:
+        parsed = int(value)
+    except ValueError:
+        return None
+    return parsed if parsed >= 0 else None
+
+
+def _upload_progress_headers(offset: int, total: int | None) -> dict[str, str]:
+    headers = {
+        "Upload-Offset": str(offset),
+        "Tus-Resumable": "1.0.0",
+    }
+    if total is not None:
+        headers["Upload-Length"] = str(total)
+    return headers
 
 
 def _submission_failure_response(submission_result: dict) -> JSONResponse:
@@ -193,6 +416,7 @@ async def init_submission_upload(request: Request, current_user: dict = Depends(
 
     contest_id = str(payload.get("contestId") or "")
     filename = _safe_submission_filename(str(payload.get("filename") or ""))
+    upload_total_bytes = _parse_positive_int(str(payload.get("totalBytes") or ""))
     if not filename:
         return JSONResponse(
             {"ok": False, "error": "File must be a .pkl file"},
@@ -205,6 +429,7 @@ async def init_submission_upload(request: Request, current_user: dict = Depends(
         contest_id=contest_id,
         filename=saved_filename,
         filepath=str(filepath),
+        upload_total_bytes=upload_total_bytes,
     )
     if not submission_result["ok"]:
         return _submission_failure_response(submission_result)
@@ -212,8 +437,371 @@ async def init_submission_upload(request: Request, current_user: dict = Depends(
     return {
         "ok": True,
         "submissionId": submission_result["submissionId"],
+        "uploadOffset": 0,
+        "uploadTotalBytes": upload_total_bytes,
         "quota": schemas.quota_snapshot_payload(submission_result["quota"]),
     }
+
+
+@app.head("/api/submissions/{submission_id}/file")
+async def get_submission_upload_offset(
+    submission_id: str,
+    current_user: dict = Depends(get_current_user),
+):
+    user_id = current_user["id"]
+    pending_upload = await repositories.fetch_pending_submission_upload(
+        submission_id,
+        user_id=user_id,
+    )
+    if pending_upload is None:
+        return Response(status_code=status.HTTP_404_NOT_FOUND)
+
+    offset = int(pending_upload["uploadReceivedBytes"] or 0)
+    total = pending_upload["uploadTotalBytes"]
+    return Response(headers=_upload_progress_headers(offset, total))
+
+
+@app.api_route("/api/submissions/{submission_id}/flow-chunks", methods=["GET", "HEAD"])
+async def test_submission_flow_chunk(
+    submission_id: str,
+    flow_chunk_number: int = Query(..., alias="flowChunkNumber"),
+    flow_total_chunks: int = Query(..., alias="flowTotalChunks"),
+    flow_chunk_size: int = Query(..., alias="flowChunkSize"),
+    flow_total_size: int = Query(..., alias="flowTotalSize"),
+    flow_identifier: str = Query("", alias="flowIdentifier"),
+    flow_filename: str = Query("", alias="flowFilename"),
+    current_user: dict = Depends(get_current_user),
+):
+    pending_upload = await repositories.fetch_pending_submission_upload(
+        submission_id,
+        user_id=current_user["id"],
+    )
+    if pending_upload is None:
+        return Response(status_code=status.HTTP_404_NOT_FOUND)
+
+    total_bytes = pending_upload["uploadTotalBytes"]
+    if not isinstance(total_bytes, int) or total_bytes <= 0:
+        return Response(status_code=status.HTTP_400_BAD_REQUEST)
+
+    params = _flow_params_from_values(
+        flow_chunk_number=flow_chunk_number,
+        flow_total_chunks=flow_total_chunks,
+        flow_chunk_size=flow_chunk_size,
+        flow_total_size=flow_total_size,
+        flow_identifier=flow_identifier,
+        flow_filename=flow_filename,
+    )
+    validation_error = _validate_flow_chunk_params(params, total_bytes)
+    if validation_error is not None:
+        return Response(status_code=status.HTTP_400_BAD_REQUEST)
+
+    part_path = _flow_part_path(Path(pending_upload["filepath"]), params.chunk_number)
+    if part_path.exists() and part_path.stat().st_size == _expected_flow_chunk_size(params):
+        return Response(status_code=status.HTTP_200_OK)
+
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@app.patch("/api/submissions/{submission_id}/file")
+async def upload_submission_file_chunk(
+    request: Request,
+    submission_id: str,
+    current_user: dict = Depends(get_current_user),
+):
+    user_id = current_user["id"]
+    pending_upload = await repositories.fetch_pending_submission_upload(
+        submission_id,
+        user_id=user_id,
+    )
+    if pending_upload is None:
+        return JSONResponse(
+            {"ok": False, "error": "Pending upload not found"},
+            status_code=status.HTTP_404_NOT_FOUND,
+        )
+
+    total_bytes = pending_upload["uploadTotalBytes"]
+    if not isinstance(total_bytes, int) or total_bytes <= 0:
+        return JSONResponse(
+            {"ok": False, "error": "Chunked upload length is missing"},
+            status_code=status.HTTP_400_BAD_REQUEST,
+        )
+
+    current_offset = int(pending_upload["uploadReceivedBytes"] or 0)
+    expected_offset = _parse_non_negative_int(request.headers.get("upload-offset"))
+    if expected_offset is None:
+        return JSONResponse(
+            {"ok": False, "error": "Upload-Offset header is required"},
+            status_code=status.HTTP_400_BAD_REQUEST,
+            headers=_upload_progress_headers(current_offset, total_bytes),
+        )
+
+    if expected_offset != current_offset:
+        return JSONResponse(
+            {
+                "ok": False,
+                "code": "UPLOAD_OFFSET_MISMATCH",
+                "error": "Upload offset mismatch",
+                "uploadOffset": current_offset,
+                "uploadTotalBytes": total_bytes,
+            },
+            status_code=status.HTTP_409_CONFLICT,
+            headers=_upload_progress_headers(current_offset, total_bytes),
+        )
+
+    filepath = Path(pending_upload["filepath"])
+    try:
+        bytes_written = await _append_request_to_part_file(
+            request,
+            filepath,
+            expected_offset=current_offset,
+        )
+    except ValueError:
+        actual_offset = await asyncio.to_thread(_file_size, _part_path(filepath))
+        return JSONResponse(
+            {
+                "ok": False,
+                "code": "UPLOAD_OFFSET_MISMATCH",
+                "error": "Upload offset mismatch",
+                "uploadOffset": actual_offset,
+                "uploadTotalBytes": total_bytes,
+            },
+            status_code=status.HTTP_409_CONFLICT,
+            headers=_upload_progress_headers(actual_offset, total_bytes),
+        )
+    except Exception:
+        # Keep the pending upload resumable after client disconnects. Stale upload
+        # cleanup refunds quota if the user never retries.
+        raise
+
+    next_offset = current_offset + bytes_written
+    if next_offset > total_bytes:
+        await asyncio.to_thread(_truncate_file, _part_path(filepath), current_offset)
+        return JSONResponse(
+            {"ok": False, "error": "Chunk exceeds upload length"},
+            status_code=status.HTTP_400_BAD_REQUEST,
+            headers=_upload_progress_headers(current_offset, total_bytes),
+        )
+
+    updated = await repositories.update_submission_upload_progress(
+        submission_id,
+        user_id=user_id,
+        received_bytes=next_offset,
+    )
+    if not updated:
+        return JSONResponse(
+            {"ok": False, "error": "Pending upload not found"},
+            status_code=status.HTTP_404_NOT_FOUND,
+        )
+
+    if next_offset < total_bytes:
+        return JSONResponse(
+            {
+                "ok": True,
+                "complete": False,
+                "submissionId": submission_id,
+                "bytesWritten": bytes_written,
+                "uploadOffset": next_offset,
+                "uploadTotalBytes": total_bytes,
+            },
+            headers=_upload_progress_headers(next_offset, total_bytes),
+        )
+
+    await _finalize_part_file(filepath)
+    completed = await repositories.complete_submission_upload(submission_id, user_id=user_id)
+    if not completed:
+        await asyncio.to_thread(filepath.unlink, missing_ok=True)
+        return JSONResponse(
+            {"ok": False, "error": "Pending upload not found"},
+            status_code=status.HTTP_404_NOT_FOUND,
+        )
+
+    request.app.state.worker.notify()
+    quota = await repositories.fetch_submission_quota(user_id, pending_upload["contestId"])
+    return JSONResponse(
+        {
+            "ok": True,
+            "complete": True,
+            "submissionId": submission_id,
+            "bytesWritten": bytes_written,
+            "uploadOffset": next_offset,
+            "uploadTotalBytes": total_bytes,
+            "quota": schemas.quota_snapshot_payload(quota) if quota is not None else None,
+        },
+        headers=_upload_progress_headers(next_offset, total_bytes),
+    )
+
+
+@app.put("/api/submissions/{submission_id}/flow-chunks")
+async def upload_submission_flow_chunk(
+    request: Request,
+    submission_id: str,
+    flow_chunk_number: int = Query(..., alias="flowChunkNumber"),
+    flow_total_chunks: int = Query(..., alias="flowTotalChunks"),
+    flow_chunk_size: int = Query(..., alias="flowChunkSize"),
+    flow_total_size: int = Query(..., alias="flowTotalSize"),
+    flow_identifier: str = Query("", alias="flowIdentifier"),
+    flow_filename: str = Query("", alias="flowFilename"),
+    current_user: dict = Depends(get_current_user),
+):
+    pending_upload = await repositories.fetch_pending_submission_upload(
+        submission_id,
+        user_id=current_user["id"],
+    )
+    if pending_upload is None:
+        return JSONResponse(
+            {"ok": False, "error": "Pending upload not found"},
+            status_code=status.HTTP_404_NOT_FOUND,
+        )
+
+    total_bytes = pending_upload["uploadTotalBytes"]
+    if not isinstance(total_bytes, int) or total_bytes <= 0:
+        return JSONResponse(
+            {"ok": False, "error": "Chunked upload length is missing"},
+            status_code=status.HTTP_400_BAD_REQUEST,
+        )
+
+    params = _flow_params_from_values(
+        flow_chunk_number=flow_chunk_number,
+        flow_total_chunks=flow_total_chunks,
+        flow_chunk_size=flow_chunk_size,
+        flow_total_size=flow_total_size,
+        flow_identifier=flow_identifier,
+        flow_filename=flow_filename,
+    )
+    validation_error = _validate_flow_chunk_params(params, total_bytes)
+    if validation_error is not None:
+        return JSONResponse(
+            {"ok": False, "error": validation_error},
+            status_code=status.HTTP_400_BAD_REQUEST,
+        )
+
+    filepath = Path(pending_upload["filepath"])
+    try:
+        bytes_written = await _store_flow_chunk(request, filepath, params)
+    except ValueError:
+        return JSONResponse(
+            {"ok": False, "error": "Flow chunk size mismatch"},
+            status_code=status.HTTP_400_BAD_REQUEST,
+        )
+
+    received_bytes = await asyncio.to_thread(_sum_flow_received_bytes, filepath, params)
+    await repositories.update_submission_upload_progress(
+        submission_id,
+        user_id=current_user["id"],
+        received_bytes=received_bytes,
+    )
+
+    return JSONResponse(
+        {
+            "ok": True,
+            "complete": False,
+            "submissionId": submission_id,
+            "chunkNumber": params.chunk_number,
+            "bytesWritten": bytes_written,
+            "uploadReceivedBytes": received_bytes,
+            "uploadTotalBytes": params.total_size,
+        },
+        status_code=status.HTTP_200_OK,
+    )
+
+
+@app.post("/api/submissions/{submission_id}/flow-complete")
+async def complete_submission_flow_upload(
+    request: Request,
+    submission_id: str,
+    current_user: dict = Depends(get_current_user),
+):
+    try:
+        payload = await request.json()
+    except json.JSONDecodeError:
+        return JSONResponse(
+            {"ok": False, "error": "Invalid JSON body"},
+            status_code=status.HTTP_400_BAD_REQUEST,
+        )
+
+    pending_upload = await repositories.fetch_pending_submission_upload(
+        submission_id,
+        user_id=current_user["id"],
+    )
+    if pending_upload is None:
+        return JSONResponse(
+            {"ok": False, "error": "Pending upload not found"},
+            status_code=status.HTTP_404_NOT_FOUND,
+        )
+
+    total_bytes = pending_upload["uploadTotalBytes"]
+    if not isinstance(total_bytes, int) or total_bytes <= 0:
+        return JSONResponse(
+            {"ok": False, "error": "Chunked upload length is missing"},
+            status_code=status.HTTP_400_BAD_REQUEST,
+        )
+
+    params = FlowChunkParams(
+        chunk_number=1,
+        total_chunks=_parse_positive_int(str(payload.get("flowTotalChunks") or "")) or 0,
+        chunk_size=_parse_positive_int(str(payload.get("flowChunkSize") or "")) or 0,
+        total_size=_parse_positive_int(str(payload.get("flowTotalSize") or "")) or 0,
+        identifier=str(payload.get("flowIdentifier") or ""),
+        filename=str(payload.get("flowFilename") or ""),
+    )
+    validation_error = _validate_flow_chunk_params(params, total_bytes)
+    if validation_error is not None:
+        return JSONResponse(
+            {"ok": False, "error": validation_error},
+            status_code=status.HTTP_400_BAD_REQUEST,
+        )
+
+    filepath = Path(pending_upload["filepath"])
+    if not await asyncio.to_thread(_all_flow_parts_present, filepath, params):
+        received_bytes = await asyncio.to_thread(_sum_flow_received_bytes, filepath, params)
+        return JSONResponse(
+            {
+                "ok": False,
+                "code": "FLOW_CHUNKS_INCOMPLETE",
+                "error": "Flow chunks are incomplete",
+                "uploadReceivedBytes": received_bytes,
+                "uploadTotalBytes": params.total_size,
+            },
+            status_code=status.HTTP_409_CONFLICT,
+        )
+
+    try:
+        await asyncio.to_thread(_merge_flow_parts, filepath, params)
+    except ValueError:
+        return JSONResponse(
+            {"ok": False, "error": "Merged upload size mismatch"},
+            status_code=status.HTTP_400_BAD_REQUEST,
+        )
+
+    await repositories.update_submission_upload_progress(
+        submission_id,
+        user_id=current_user["id"],
+        received_bytes=params.total_size,
+    )
+    completed = await repositories.complete_submission_upload(
+        submission_id,
+        user_id=current_user["id"],
+    )
+    if not completed:
+        await asyncio.to_thread(filepath.unlink, missing_ok=True)
+        return JSONResponse(
+            {"ok": False, "error": "Pending upload not found"},
+            status_code=status.HTTP_404_NOT_FOUND,
+        )
+
+    request.app.state.worker.notify()
+    quota = await repositories.fetch_submission_quota(current_user["id"], pending_upload["contestId"])
+    return JSONResponse(
+        {
+            "ok": True,
+            "complete": True,
+            "submissionId": submission_id,
+            "uploadReceivedBytes": params.total_size,
+            "uploadTotalBytes": params.total_size,
+            "quota": schemas.quota_snapshot_payload(quota) if quota is not None else None,
+        },
+        status_code=status.HTTP_200_OK,
+    )
 
 
 @app.put("/api/submissions/{submission_id}/file")
@@ -278,6 +866,7 @@ async def cancel_submission_upload(
         filepath = Path(pending_upload["filepath"])
         await asyncio.to_thread(filepath.unlink, missing_ok=True)
         await asyncio.to_thread(filepath.with_name(f"{filepath.name}.part").unlink, missing_ok=True)
+        await asyncio.to_thread(shutil.rmtree, _flow_parts_dir(filepath), True)
         await repositories.fail_submission_upload(
             submission_id,
             user_id=user_id,

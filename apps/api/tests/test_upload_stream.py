@@ -4,7 +4,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from backend.main import _stream_request_to_file
+from backend.main import _append_request_to_part_file, _finalize_part_file, _stream_request_to_file
 
 
 class FakeRequest:
@@ -44,6 +44,65 @@ class UploadStreamTests(unittest.IsolatedAsyncioTestCase):
 
             self.assertFalse(filepath.exists())
             self.assertFalse(filepath.with_name("submission.pkl.part").exists())
+
+    async def test_append_request_writes_chunk_at_expected_offset(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            filepath = Path(temp_dir) / "submission.pkl"
+            part_path = filepath.with_name("submission.pkl.part")
+            part_path.write_bytes(b"abc")
+
+            bytes_written = await _append_request_to_part_file(
+                FakeRequest([b"def", b"", b"ghi"]),
+                filepath,
+                expected_offset=3,
+            )
+
+            self.assertEqual(bytes_written, 6)
+            self.assertEqual(part_path.read_bytes(), b"abcdefghi")
+            self.assertFalse(filepath.exists())
+
+    async def test_append_request_rejects_unexpected_part_offset(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            filepath = Path(temp_dir) / "submission.pkl"
+            part_path = filepath.with_name("submission.pkl.part")
+            part_path.write_bytes(b"abc")
+
+            with self.assertRaises(ValueError):
+                await _append_request_to_part_file(
+                    FakeRequest([b"def"]),
+                    filepath,
+                    expected_offset=2,
+                )
+
+            self.assertEqual(part_path.read_bytes(), b"abc")
+            self.assertFalse(filepath.exists())
+
+    async def test_append_request_truncates_partial_chunk_on_error(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            filepath = Path(temp_dir) / "submission.pkl"
+            part_path = filepath.with_name("submission.pkl.part")
+            part_path.write_bytes(b"abc")
+
+            with self.assertRaises(RuntimeError):
+                await _append_request_to_part_file(
+                    FakeRequest([b"def", RuntimeError("disconnect")]),
+                    filepath,
+                    expected_offset=3,
+                )
+
+            self.assertEqual(part_path.read_bytes(), b"abc")
+            self.assertFalse(filepath.exists())
+
+    async def test_finalize_part_file_atomically_renames_completed_upload(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            filepath = Path(temp_dir) / "submission.pkl"
+            part_path = filepath.with_name("submission.pkl.part")
+            part_path.write_bytes(b"abcdef")
+
+            await _finalize_part_file(filepath)
+
+            self.assertEqual(filepath.read_bytes(), b"abcdef")
+            self.assertFalse(part_path.exists())
 
 
 if __name__ == "__main__":

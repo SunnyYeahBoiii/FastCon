@@ -386,6 +386,7 @@ class SubmissionQuotaRepositoryTests(unittest.IsolatedAsyncioTestCase):
             contest_id="c1",
             filename="large.pkl",
             filepath="/tmp/large.pkl",
+            upload_total_bytes=12,
         )
 
         self.assertTrue(result["ok"])
@@ -395,13 +396,32 @@ class SubmissionQuotaRepositoryTests(unittest.IsolatedAsyncioTestCase):
         connection = sqlite3.connect(self.db_path)
         try:
             row = connection.execute(
-                'SELECT "status", "quotaUsageState" FROM "Submission" WHERE "id" = ?',
+                '''
+                SELECT "status", "quotaUsageState", "uploadTotalBytes", "uploadReceivedBytes"
+                FROM "Submission"
+                WHERE "id" = ?
+                ''',
                 (result["submissionId"],),
             ).fetchone()
         finally:
             connection.close()
 
-        self.assertEqual(row, ("uploading", "pending"))
+        self.assertEqual(row, ("uploading", "pending", 12, 0))
+
+        progressed = await repositories.update_submission_upload_progress(
+            result["submissionId"],
+            user_id="u1",
+            received_bytes=7,
+        )
+        self.assertTrue(progressed)
+
+        pending_upload = await repositories.fetch_pending_submission_upload(
+            result["submissionId"],
+            user_id="u1",
+        )
+        assert pending_upload is not None
+        self.assertEqual(pending_upload["uploadTotalBytes"], 12)
+        self.assertEqual(pending_upload["uploadReceivedBytes"], 7)
 
         completed = await repositories.complete_submission_upload(
             result["submissionId"],
