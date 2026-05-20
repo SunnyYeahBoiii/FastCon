@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import sqlite3
 import tempfile
 import unittest
@@ -181,7 +182,7 @@ class SubmissionQuotaRepositoryTests(unittest.IsolatedAsyncioTestCase):
         self.temp_dir.cleanup()
 
     def _insert_quota_window(self, *, count: int = 99) -> datetime:
-        started_at = datetime(2026, 5, 18, 1, 0, tzinfo=timezone.utc)
+        started_at = datetime.now(timezone.utc) - timedelta(hours=1)
         connection = sqlite3.connect(self.db_path)
         try:
             connection.execute(
@@ -441,6 +442,50 @@ class SubmissionQuotaRepositoryTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(quota["used"], 0)
         self.assertEqual(quota["remaining"], 3)
         self.assertEqual(self._quota_usage_state(result["submissionId"]), "refunded")
+
+    async def test_stale_uploads_fail_and_refund_reserved_quota(self) -> None:
+        stale_created_at = datetime(2026, 5, 18, 1, 0, tzinfo=timezone.utc)
+        fresh_created_at = datetime(2026, 5, 18, 1, 10, tzinfo=timezone.utc)
+        self._insert_submission(
+            "s-stale-upload",
+            status="uploading",
+            quota_usage_state="pending",
+            created_at=stale_created_at,
+        )
+        self._insert_submission(
+            "s-fresh-upload",
+            status="uploading",
+            quota_usage_state="pending",
+            created_at=fresh_created_at,
+        )
+
+        failed_uploads = await repositories.fail_stale_submission_uploads(
+            older_than=datetime(2026, 5, 18, 1, 5, tzinfo=timezone.utc),
+            message="Upload did not finish before timeout",
+        )
+
+        self.assertEqual([row["id"] for row in failed_uploads], ["s-stale-upload"])
+
+        connection = sqlite3.connect(self.db_path)
+        try:
+            rows = connection.execute(
+                '''
+                SELECT "id", "status", "metrics", "quotaUsageState"
+                FROM "Submission"
+                WHERE "id" IN ('s-stale-upload', 's-fresh-upload')
+                ORDER BY "id"
+                '''
+            ).fetchall()
+        finally:
+            connection.close()
+
+        self.assertEqual(rows[0][0], "s-fresh-upload")
+        self.assertEqual(rows[0][1], "uploading")
+        self.assertEqual(rows[0][3], "pending")
+        self.assertEqual(rows[1][0], "s-stale-upload")
+        self.assertEqual(rows[1][1], "failed")
+        self.assertEqual(json.loads(rows[1][2]), {"error": "Upload did not finish before timeout"})
+        self.assertEqual(rows[1][3], "refunded")
 
 
 class RuntimeSchemaEnsureTests(unittest.IsolatedAsyncioTestCase):

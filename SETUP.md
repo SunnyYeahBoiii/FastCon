@@ -94,6 +94,7 @@ Variables currently written by setup:
 | `WORKER_POLL_MS` | Poll interval for the FastAPI submission worker |
 | `WORKER_MAX_CONCURRENT` | Maximum concurrent judge jobs |
 | `JUDGE_TIMEOUT_SECONDS` | Per-submission judge timeout |
+| `PENDING_UPLOAD_TIMEOUT_SECONDS` | Max age for a reserved upload before it is failed and quota is refunded |
 | `UPLOAD_DIR` | Compatibility alias that still points to `storage/submissions` |
 | `MAX_CONCURRENT_JUDGES` | Compatibility alias for worker concurrency |
 | `SEED_ADMIN_PASSWORD` | Admin password used during seed |

@@ -2,12 +2,14 @@ from __future__ import annotations
 
 import asyncio
 from contextlib import suppress
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from . import repositories, schemas
 from .config import (
     APP_ROOT,
     get_judge_timeout_seconds,
+    get_pending_upload_timeout_seconds,
     get_python_bin,
     get_worker_max_concurrent,
     get_worker_poll_ms,
@@ -52,8 +54,15 @@ class SubmissionWorker:
 
     async def _run_loop(self) -> None:
         poll_seconds = get_worker_poll_ms() / 1000
+        pending_upload_timeout_seconds = get_pending_upload_timeout_seconds()
+        stale_check_interval = min(60, max(poll_seconds, pending_upload_timeout_seconds / 10))
+        next_stale_check = 0.0
         try:
             while not self._stop_event.is_set():
+                now = asyncio.get_running_loop().time()
+                if now >= next_stale_check:
+                    await self._fail_stale_uploads(pending_upload_timeout_seconds)
+                    next_stale_check = now + stale_check_interval
                 await self._fill_available_slots()
                 self._wakeup_event.clear()
                 try:
@@ -73,6 +82,21 @@ class SubmissionWorker:
             task = asyncio.create_task(self._process_job(job))
             self._active[job["id"]] = task
             task.add_done_callback(lambda _task, submission_id=job["id"]: self._active.pop(submission_id, None))
+
+    async def _fail_stale_uploads(self, timeout_seconds: int) -> None:
+        cutoff = datetime.now(timezone.utc) - timedelta(seconds=timeout_seconds)
+        failed_uploads = await repositories.fail_stale_submission_uploads(
+            older_than=cutoff,
+            message="Upload did not finish before timeout",
+        )
+        for upload in failed_uploads:
+            filepath = Path(upload["filepath"])
+            await asyncio.to_thread(filepath.unlink, missing_ok=True)
+            await asyncio.to_thread(filepath.with_name(f"{filepath.name}.part").unlink, missing_ok=True)
+            await self._broadcaster.publish(
+                upload["userId"],
+                schemas.submission_update_payload(upload, upload["id"], "failed"),
+            )
 
     async def _process_job(self, job: dict) -> None:
         submission_id = job["id"]

@@ -225,6 +225,7 @@ The most important variables are:
 - `WORKER_POLL_MS`: worker wake-up interval
 - `WORKER_MAX_CONCURRENT`: max number of concurrent judge jobs
 - `JUDGE_TIMEOUT_SECONDS`: per-job timeout
+- `PENDING_UPLOAD_TIMEOUT_SECONDS`: max age for a reserved upload before it is failed and quota is refunded
 
 The setup script also writes compatibility aliases that still exist in the runtime config:
 

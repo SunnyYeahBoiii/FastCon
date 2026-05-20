@@ -91,3 +91,7 @@ def get_worker_max_concurrent() -> int:
 
 def get_judge_timeout_seconds() -> int:
     return _read_int("JUDGE_TIMEOUT_SECONDS", 120)
+
+
+def get_pending_upload_timeout_seconds() -> int:
+    return _read_int("PENDING_UPLOAD_TIMEOUT_SECONDS", 900)

@@ -647,6 +647,55 @@ async def fail_submission_upload(
         return cursor.rowcount == 1
 
 
+async def fail_stale_submission_uploads(
+    *,
+    older_than: datetime,
+    message: str,
+) -> list[dict[str, Any]]:
+    metrics = json.dumps({"error": message})
+    await ensure_runtime_schema()
+    async with open_connection() as connection:
+        await connection.execute("BEGIN IMMEDIATE")
+        cursor = await connection.execute(
+            '''
+            SELECT "id", "userId", "filepath"
+            FROM "Submission"
+            WHERE "status" = 'uploading'
+              AND datetime("createdAt") < datetime(?)
+            ORDER BY "createdAt" ASC
+            ''',
+            (older_than.isoformat(),),
+        )
+        rows = [dict(row) for row in await cursor.fetchall()]
+        if not rows:
+            await connection.commit()
+            return []
+
+        await connection.execute(
+            '''
+            UPDATE "Submission"
+            SET
+              "status" = 'failed',
+              "metrics" = ?,
+              "quotaUsageState" = 'refunded'
+            WHERE "status" = 'uploading'
+              AND datetime("createdAt") < datetime(?)
+            ''',
+            (metrics, older_than.isoformat()),
+        )
+        await connection.commit()
+
+    return [
+        {
+            **row,
+            "status": "failed",
+            "score": None,
+            "metrics": metrics,
+        }
+        for row in rows
+    ]
+
+
 async def reset_running_submissions() -> None:
     async with open_connection() as connection:
         await connection.execute(
