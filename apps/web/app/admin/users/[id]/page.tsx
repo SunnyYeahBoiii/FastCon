@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { ArrowLeft, KeyRound, FileCheck, Trophy } from "lucide-react";
 import Link from "next/link";
 import { readApiError, readApiJson } from "@/lib/apiClient";
+import { formatHoChiMinhDateTime } from "@/lib/timeZone";
 
 interface User {
   id: string;
@@ -36,13 +37,7 @@ function getInitials(name: string): string {
 }
 
 function formatDate(dateString: string): string {
-  return new Date(dateString).toLocaleDateString("vi-VN", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
+  return formatHoChiMinhDateTime(dateString);
 }
 
 function getStatusColor(status: string): string {

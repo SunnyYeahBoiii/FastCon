@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/db";
+import { formatHoChiMinhDate, formatHoChiMinhTime } from "@/lib/timeZone";
 import { Users } from "lucide-react";
 
 export default async function ContestsPage() {
@@ -96,7 +97,7 @@ export default async function ContestsPage() {
                 <div className="col-span-3 text-center">
                   <p className="text-sm font-medium text-on-surface">
                     {contest.deadline
-                      ? new Date(contest.deadline).toLocaleDateString("vi-VN", {
+                      ? formatHoChiMinhDate(contest.deadline, {
                           month: "short",
                           day: "numeric",
                           year: "numeric",
@@ -105,10 +106,9 @@ export default async function ContestsPage() {
                   </p>
                   {contest.deadline && (
                     <p className="text-[10px] text-on-surface-variant">
-                      {new Date(contest.deadline).toLocaleTimeString("vi-VN", {
+                      {formatHoChiMinhTime(contest.deadline, {
                         hour: "2-digit",
                         minute: "2-digit",
-                        hour12: false,
                       })}
                     </p>
                   )}

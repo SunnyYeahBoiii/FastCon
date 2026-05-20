@@ -3,6 +3,7 @@
 import { RefreshCw } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { readApiError, readApiJson } from "@/lib/apiClient";
+import { formatHoChiMinhDateTime } from "@/lib/timeZone";
 
 import type { SubmissionQuotaSnapshot } from "@/lib/submissionQuota";
 
@@ -24,13 +25,7 @@ interface QuotaResetSectionProps {
 
 function formatDate(value: string | null) {
   if (!value) return "Chưa có";
-  return new Date(value).toLocaleString("vi-VN", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
+  return formatHoChiMinhDateTime(value);
 }
 
 function quotaLabel(quota: SubmissionQuotaSnapshot) {

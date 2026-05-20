@@ -1,3 +1,5 @@
+import { parseHoChiMinhDatetimeLocal } from "../../../lib/timeZone";
+
 type ParseLimitResult =
   | { ok: true; value: number | null | undefined }
   | { ok: false; error: string };
@@ -59,20 +61,8 @@ export function parseContestDeadline(value: unknown): ParseDeadlineResult {
     return { ok: false, error: "Deadline must be a valid datetime" };
   }
 
-  const year = Number(match[1] ?? "");
-  const month = Number(match[2] ?? "");
-  const day = Number(match[3] ?? "");
-  const hour = Number(match[4] ?? "");
-  const minute = Number(match[5] ?? "");
-
-  const deadline = new Date(Date.UTC(year, month - 1, day, hour, minute));
-  if (
-    deadline.getUTCFullYear() !== year ||
-    deadline.getUTCMonth() !== month - 1 ||
-    deadline.getUTCDate() !== day ||
-    deadline.getUTCHours() !== hour ||
-    deadline.getUTCMinutes() !== minute
-  ) {
+  const deadline = parseHoChiMinhDatetimeLocal(value);
+  if (!deadline) {
     return { ok: false, error: "Deadline must be a valid datetime" };
   }
 

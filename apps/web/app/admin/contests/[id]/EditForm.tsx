@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { readApiError, readApiJson } from "@/lib/apiClient";
+import { APP_TIME_ZONE_LABEL, formatHoChiMinhDatetimeLocal } from "@/lib/timeZone";
 
 interface Contest {
   id: string;
@@ -19,13 +20,7 @@ export default function EditForm({ contest }: { contest: Contest }) {
   const [formData, setFormData] = useState({
     title: contest.title,
     description: contest.description || "",
-    deadline: contest.deadline
-      ? (() => {
-          const d = new Date(contest.deadline);
-          const pad = (n: number) => n.toString().padStart(2, "0");
-          return `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())}T${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}`;
-        })()
-      : "",
+    deadline: contest.deadline ? formatHoChiMinhDatetimeLocal(contest.deadline) : "",
     dailySubmissionLimit: contest.dailySubmissionLimit?.toString() || "",
     status: contest.status,
   });
@@ -102,7 +97,7 @@ export default function EditForm({ contest }: { contest: Contest }) {
 
         <div>
           <label className="block text-sm font-medium text-on-surface-variant mb-1">
-            Hạn chót
+            Hạn chót (giờ {APP_TIME_ZONE_LABEL})
           </label>
           <input
             type="datetime-local"

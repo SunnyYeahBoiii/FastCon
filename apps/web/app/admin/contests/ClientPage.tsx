@@ -4,6 +4,7 @@ import { Search, Edit, Trash2, Plus, X, Upload } from "lucide-react";
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { readApiError, readApiJson } from "@/lib/apiClient";
+import { APP_TIME_ZONE_LABEL, formatHoChiMinhDateTime } from "@/lib/timeZone";
 
 interface Contest {
   id: string;
@@ -159,8 +160,7 @@ export default function ContestsPage() {
 
   const formatDate = (dateStr: string | null) => {
     if (!dateStr) return "Không có hạn";
-    const date = new Date(dateStr);
-    return date.toLocaleDateString("vi-VN");
+    return formatHoChiMinhDateTime(dateStr);
   };
 
   return (
@@ -345,7 +345,7 @@ export default function ContestsPage() {
 
                 <div>
                   <label className="block text-sm font-medium text-on-surface-variant mb-1">
-                    Hạn chót
+                    Hạn chót (giờ {APP_TIME_ZONE_LABEL})
                   </label>
                   <input
                     type="datetime-local"

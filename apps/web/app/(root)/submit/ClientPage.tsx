@@ -10,6 +10,7 @@ import {
 } from "react";
 import { Upload, Send, ChevronDown, CheckCircle, Clock, AlertCircle } from "lucide-react";
 import { mergeSubmissionStatusUpdate } from "@/lib/submissionRealtime";
+import { formatHoChiMinhDateTime } from "@/lib/timeZone";
 import { uploadSubmissionFileWithFlow } from "./flowUpload";
 
 declare const process: {
@@ -832,9 +833,7 @@ function SubmissionCard({ sub, error }: { sub: Submission; error: string | null 
             <StatusBadge status={sub.status} />
           </div>
           <div className="text-xs text-on-surface-variant">
-            <span suppressHydrationWarning>
-              {new Date(sub.createdAt).toLocaleString("vi-VN")}
-            </span>{" "}
+            <span>{formatHoChiMinhDateTime(sub.createdAt)}</span>{" "}
             · {sub.filename}
           </div>
         </div>
@@ -867,11 +866,8 @@ function SubmissionCard({ sub, error }: { sub: Submission; error: string | null 
   );
 }
 
-function formatAbsoluteTime(value: string, localeReady: boolean) {
-  if (!localeReady) {
-    return new Date(value).toISOString().replace("T", " ").slice(0, 16);
-  }
-  return new Date(value).toLocaleString("vi-VN");
+function formatAbsoluteTime(value: string, _localeReady: boolean) {
+  return formatHoChiMinhDateTime(value);
 }
 
 function formatCountdown(resetAt: string, nowMs: number) {

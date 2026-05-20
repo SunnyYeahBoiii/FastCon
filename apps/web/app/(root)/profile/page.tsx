@@ -1,5 +1,6 @@
 import { getSessionUser } from "@/lib/session";
 import { prisma } from "@/lib/db";
+import { formatHoChiMinhDateTime } from "@/lib/timeZone";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import ChangePasswordForm from "./ChangePasswordForm";
@@ -25,14 +26,7 @@ export default async function ProfilePage() {
     },
   });
 
-  const formatDate = (date: Date) =>
-    date.toLocaleDateString("vi-VN", {
-      day: "2-digit",
-      month: "2-digit",
-      year: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
+  const formatDate = (date: Date) => formatHoChiMinhDateTime(date);
 
   return (
     <div className="max-w-screen-xl mx-auto px-4 py-8">

@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { Search, X } from "lucide-react";
 import { readApiError, readApiJson } from "@/lib/apiClient";
+import { formatHoChiMinhDate, formatHoChiMinhTime } from "@/lib/timeZone";
 
 interface User {
   id: string;
@@ -59,11 +60,11 @@ function getScoreBadge(score: number | null): { bg: string; text: string } {
 }
 
 function formatDate(iso: string): string {
-  return new Date(iso).toLocaleDateString("vi-VN");
+  return formatHoChiMinhDate(iso);
 }
 
 function formatTime(iso: string): string {
-  return new Date(iso).toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" });
+  return formatHoChiMinhTime(iso);
 }
 
 function getErrorInfo(metrics: string | null) {

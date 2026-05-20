@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { formatHoChiMinhDateTime } from "@/lib/timeZone";
 
 declare const process: {
   env: {
@@ -33,10 +34,7 @@ function apiUrl(path: string) {
 }
 
 function formatDate(dateStr: string) {
-  return new Date(dateStr).toLocaleDateString("vi-VN", {
-    hour: "2-digit",
-    minute: "2-digit",
-  });
+  return formatHoChiMinhDateTime(dateStr);
 }
 
 export default function SubmissionsTable({ submissions }: SubmissionsTableProps) {
