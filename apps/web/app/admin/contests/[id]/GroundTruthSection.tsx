@@ -3,6 +3,7 @@
 import { useState, useRef } from "react";
 import { Upload } from "lucide-react";
 import { useRouter } from "next/navigation";
+import { readApiError, readApiJson } from "@/lib/apiClient";
 
 interface GroundTruthSectionProps {
   contestId: string;
@@ -15,6 +16,7 @@ export default function GroundTruthSection({
 }: GroundTruthSectionProps) {
   const router = useRouter();
   const [uploading, setUploading] = useState(false);
+  const [error, setError] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -22,6 +24,7 @@ export default function GroundTruthSection({
     if (!file) return;
 
     setUploading(true);
+    setError("");
     try {
       const formData = new FormData();
       formData.append("file", file);
@@ -31,17 +34,24 @@ export default function GroundTruthSection({
         body: formData,
       });
 
-      const data = await response.json();
-      if (data.ok) {
+      if (!response.ok) {
+        setError(await readApiError(response, "Không thể upload file"));
+        return;
+      }
+      const data = await readApiJson<{ ok?: boolean; error?: string }>(response);
+      if (data?.ok) {
         router.refresh();
       } else {
-        alert(data.error || "Không thể upload file");
+        setError(data?.error || "Không thể upload file");
       }
     } catch (error) {
       console.error("Upload ground truth error:", error);
-      alert("Không thể upload file");
+      setError("Không thể upload file");
     } finally {
       setUploading(false);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = "";
+      }
     }
   };
 
@@ -54,6 +64,11 @@ export default function GroundTruthSection({
       <h2 className="text-lg font-bold text-on-surface mb-4">
         File đáp án
       </h2>
+      {error && (
+        <div className="mb-4 rounded-lg bg-error-container/20 px-4 py-2 text-sm text-error">
+          {error}
+        </div>
+      )}
 
       <div className="mb-4">
         {groundTruthPath ? (

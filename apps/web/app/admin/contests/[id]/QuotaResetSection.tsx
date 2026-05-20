@@ -2,6 +2,7 @@
 
 import { RefreshCw } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
+import { readApiError, readApiJson } from "@/lib/apiClient";
 
 import type { SubmissionQuotaSnapshot } from "@/lib/submissionQuota";
 
@@ -62,16 +63,23 @@ export default function QuotaResetSection({ contestId }: QuotaResetSectionProps)
     setError("");
     try {
       const response = await fetch(`/cs116.khtn/api/contests/${contestId}/quota`);
-      const data = await response.json();
-      if (!response.ok || !data.ok) {
-        throw new Error(data.error || "Không thể tải quota");
+      if (!response.ok) {
+        throw new Error(await readApiError(response, "Không thể tải quota"));
       }
-      const nextEntries = data.entries as QuotaEntry[];
+      const data = await readApiJson<{
+        ok?: boolean;
+        error?: string;
+        entries?: QuotaEntry[];
+      }>(response);
+      if (!data?.ok) {
+        throw new Error(data?.error || "Không thể tải quota");
+      }
+      const nextEntries = data.entries || [];
       setEntries(nextEntries);
       setSelectedUserId((current) => current || nextEntries[0]?.user.id || "");
     } catch (fetchError) {
       console.error("Fetch contest quota error:", fetchError);
-      setError("Không thể tải quota nộp bài");
+      setError(fetchError instanceof Error ? fetchError.message : "Không thể tải quota nộp bài");
     } finally {
       setLoading(false);
     }
@@ -98,25 +106,33 @@ export default function QuotaResetSection({ contestId }: QuotaResetSectionProps)
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ userId: selectedEntry.user.id }),
       });
-      const data = await response.json();
-      if (!response.ok || !data.ok) {
-        throw new Error(data.error || "Không thể reset quota");
+      if (!response.ok) {
+        throw new Error(await readApiError(response, "Không thể reset quota"));
+      }
+      const data = await readApiJson<{
+        ok?: boolean;
+        error?: string;
+        entry?: QuotaEntry;
+        resetCount?: number;
+      }>(response);
+      if (!data?.ok || !data.entry) {
+        throw new Error(data?.error || "Không thể reset quota");
       }
 
-      const updatedEntry = data.entry as QuotaEntry;
+      const updatedEntry = data.entry;
       setEntries((current) =>
         current.map((entry) =>
           entry.user.id === updatedEntry.user.id ? updatedEntry : entry
         )
       );
       setNotice(
-        data.resetCount > 0
+        (data.resetCount ?? 0) > 0
           ? "Đã reset quota nộp bài"
           : "Quota nộp bài đang trống"
       );
     } catch (resetError) {
       console.error("Reset quota error:", resetError);
-      setError("Không thể reset quota nộp bài");
+      setError(resetError instanceof Error ? resetError.message : "Không thể reset quota nộp bài");
     } finally {
       setResetting(false);
     }

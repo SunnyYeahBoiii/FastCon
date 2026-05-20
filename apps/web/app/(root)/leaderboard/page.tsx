@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { Search, Trophy } from "lucide-react";
+import { readApiError, readApiJson } from "@/lib/apiClient";
 
 interface LeaderboardEntry {
   rank: number;
@@ -27,13 +28,23 @@ export default function LeaderboardPage() {
   const [contests, setContests] = useState<Contest[]>([]);
   const [selectedContest, setSelectedContest] = useState<string>("");
   const [contestsLoaded, setContestsLoaded] = useState(false);
+  const [error, setError] = useState("");
 
   // Fetch contests list
   useEffect(() => {
-    fetch("/cs116.khtn/api/public/contests")
-      .then((r) => r.json())
-      .then((data) => {
-        const nextContests: Contest[] = data.contests || [];
+    let active = true;
+
+    const loadContests = async () => {
+      try {
+        const response = await fetch("/cs116.khtn/api/public/contests");
+        if (!response.ok) {
+          throw new Error(await readApiError(response, "Không thể tải danh sách cuộc thi"));
+        }
+        const data = await readApiJson<{ contests?: Contest[] }>(response);
+        if (!active) {
+          return;
+        }
+        const nextContests: Contest[] = data?.contests || [];
         setContests(nextContests);
         setSelectedContest((current) => {
           if (current && nextContests.some((contest) => contest.id === current)) {
@@ -41,9 +52,25 @@ export default function LeaderboardPage() {
           }
           return nextContests[0]?.id ?? "";
         });
-      })
-      .catch(console.error)
-      .finally(() => setContestsLoaded(true));
+      } catch (error) {
+        console.error("Fetch contests error:", error);
+        if (active) {
+          setError(
+            error instanceof Error ? error.message : "Không thể tải danh sách cuộc thi"
+          );
+        }
+      } finally {
+        if (active) {
+          setContestsLoaded(true);
+        }
+      }
+    };
+
+    void loadContests();
+
+    return () => {
+      active = false;
+    };
   }, []);
 
   const queryParams = `?contestId=${encodeURIComponent(selectedContest)}`;
@@ -64,23 +91,28 @@ export default function LeaderboardPage() {
 
     setLoading(true);
     setLeaderboard([]);
+    setError("");
 
     const loadLeaderboard = async () => {
       try {
         const response = await fetch(`/cs116.khtn/api/leaderboard${queryParams}`, {
           signal: controller.signal,
         });
-        const data = await response.json();
+        if (!response.ok) {
+          throw new Error(await readApiError(response, "Không thể tải leaderboard"));
+        }
+        const data = await readApiJson<{ leaderboard?: LeaderboardEntry[] }>(response);
         if (!active) {
           return;
         }
-        setLeaderboard(data.leaderboard ?? []);
+        setLeaderboard(data?.leaderboard ?? []);
         setLoading(false);
       } catch (error) {
         if (!active || (error instanceof DOMException && error.name === "AbortError")) {
           return;
         }
         console.error(error);
+        setError(error instanceof Error ? error.message : "Không thể tải leaderboard");
         setLoading(false);
       }
     };
@@ -103,6 +135,7 @@ export default function LeaderboardPage() {
         }
       } catch (error) {
         console.error("Leaderboard stream event error:", error);
+        setError("Không thể đọc dữ liệu cập nhật leaderboard");
       }
     };
 
@@ -155,6 +188,12 @@ export default function LeaderboardPage() {
           competing groups.
         </p>
       </div>
+
+      {error && (
+        <div className="mb-4 rounded-lg bg-error-container/20 px-4 py-3 text-sm text-error">
+          {error}
+        </div>
+      )}
 
       {/* Search, filter and contest selector */}
       <div className="flex flex-col sm:flex-row justify-between items-center mb-8 gap-4 bg-surface-container-low p-4 rounded-lg">

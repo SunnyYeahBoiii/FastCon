@@ -9,22 +9,32 @@ export async function PUT(request: Request) {
     const sessionId = cookieStore.get("session")?.value;
 
     if (!sessionId) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
     }
 
-    const body = await request.json();
-    const { currentPassword, newPassword } = body;
+    const body = await request.json().catch(() => null);
+    if (!body || typeof body !== "object" || Array.isArray(body)) {
+      return NextResponse.json(
+        { ok: false, error: "JSON không hợp lệ" },
+        { status: 400 }
+      );
+    }
+
+    const input = body as Record<string, unknown>;
+    const currentPassword =
+      typeof input.currentPassword === "string" ? input.currentPassword : "";
+    const newPassword = typeof input.newPassword === "string" ? input.newPassword : "";
 
     if (!currentPassword || !newPassword) {
       return NextResponse.json(
-        { error: "Vui lòng nhập đầy đủ thông tin" },
+        { ok: false, error: "Vui lòng nhập đầy đủ thông tin" },
         { status: 400 }
       );
     }
 
     if (newPassword.length < 6) {
       return NextResponse.json(
-        { error: "Mật khẩu mới phải có ít nhất 6 ký tự" },
+        { ok: false, error: "Mật khẩu mới phải có ít nhất 6 ký tự" },
         { status: 400 }
       );
     }
@@ -35,7 +45,7 @@ export async function PUT(request: Request) {
     });
 
     if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
     }
 
     const isCurrentPasswordValid = await verifyPassword(
@@ -45,7 +55,7 @@ export async function PUT(request: Request) {
 
     if (!isCurrentPasswordValid) {
       return NextResponse.json(
-        { error: "Mật khẩu hiện tại không đúng" },
+        { ok: false, error: "Mật khẩu hiện tại không đúng" },
         { status: 400 }
       );
     }
@@ -61,7 +71,7 @@ export async function PUT(request: Request) {
   } catch (error) {
     console.error("Change profile password error:", error);
     return NextResponse.json(
-      { error: "Lỗi khi đổi mật khẩu" },
+      { ok: false, error: "Lỗi khi đổi mật khẩu" },
       { status: 500 }
     );
   }

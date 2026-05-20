@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import type { FormEvent } from "react";
+import { readApiError, readApiJson } from "@/lib/apiClient";
 
 export default function LoginPage() {
   const [error, setError] = useState("");
@@ -25,10 +26,14 @@ export default function LoginPage() {
         body: JSON.stringify({ username, password }),
       });
 
-      const data = await res.json();
-
       if (!res.ok) {
-        setError(data.error || "Đăng nhập thất bại");
+        setError(await readApiError(res, "Đăng nhập thất bại"));
+        return;
+      }
+
+      const data = await readApiJson<{ user?: { role?: string } }>(res);
+      if (!data?.user) {
+        setError("Đăng nhập thất bại");
         return;
       }
 

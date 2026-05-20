@@ -69,10 +69,21 @@ export async function proxySubmissionRequest(
     init.duplex = "half";
   }
 
-  const response = await fetch(targetUrl, init);
-  return new Response(request.method === "HEAD" ? null : response.body, {
-    status: response.status,
-    statusText: response.statusText,
-    headers: copyResponseHeaders(response),
-  });
+  try {
+    const response = await fetch(targetUrl, init);
+    return new Response(request.method === "HEAD" ? null : response.body, {
+      status: response.status,
+      statusText: response.statusText,
+      headers: copyResponseHeaders(response),
+    });
+  } catch (error) {
+    console.error("Submission proxy error:", error);
+    if (request.method === "HEAD") {
+      return new Response(null, { status: 502 });
+    }
+    return NextResponse.json(
+      { ok: false, error: "Submission service unavailable" },
+      { status: 502 }
+    );
+  }
 }

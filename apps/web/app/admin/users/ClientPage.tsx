@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { Search, Eye, Trash2, Plus, X, UserPlus, FileJson } from "lucide-react";
 import Link from "next/link";
+import { readApiError, readApiJson } from "@/lib/apiClient";
 
 interface User {
   id: string;
@@ -25,6 +26,7 @@ export default function UsersPage() {
   const [users, setUsers] = useState<User[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [loading, setLoading] = useState(true);
+  const [pageError, setPageError] = useState("");
 
   // Modal states
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -47,18 +49,28 @@ export default function UsersPage() {
     role: "contestant",
   });
   const [formError, setFormError] = useState("");
+  const [deleteError, setDeleteError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const fetchUsers = useCallback(async () => {
     setLoading(true);
+    setPageError("");
     try {
       const res = await fetch("/cs116.khtn/api/users");
-      const data = await res.json();
-      setUsers(data.users || []);
+      if (!res.ok) {
+        throw new Error(await readApiError(res, "Không thể tải danh sách người dùng"));
+      }
+      const data = await readApiJson<{ users?: User[] }>(res);
+      setUsers(data?.users || []);
     } catch (error) {
       console.error("Fetch users error:", error);
+      setUsers([]);
+      setPageError(
+        error instanceof Error ? error.message : "Không thể tải danh sách người dùng"
+      );
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   }, []);
 
   useEffect(() => {
@@ -83,10 +95,8 @@ export default function UsersPage() {
         body: JSON.stringify(createForm),
       });
 
-      const data = await res.json();
-
       if (!res.ok) {
-        setFormError(data.error || "Lỗi khi tạo người dùng");
+        setFormError(await readApiError(res, "Lỗi khi tạo người dùng"));
         return;
       }
 
@@ -95,8 +105,9 @@ export default function UsersPage() {
       fetchUsers();
     } catch (error) {
       setFormError("Lỗi kết nối");
+    } finally {
+      setIsSubmitting(false);
     }
-    setIsSubmitting(false);
   };
 
   const ALLOWED_FIELDS = new Set(["displayName", "username", "password", "role"]);
@@ -165,27 +176,28 @@ export default function UsersPage() {
     const errors: string[] = [];
 
     for (const user of validation.users!) {
-      const res = await fetch("/cs116.khtn/api/users", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name: user.displayName,
-          username: user.username,
-          password: user.password,
-          role: user.role || "contestant",
-        }),
-      });
+      try {
+        const res = await fetch("/cs116.khtn/api/users", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            name: user.displayName,
+            username: user.username,
+            password: user.password,
+            role: user.role || "contestant",
+          }),
+        });
 
-      if (res.ok) {
-        success++;
-      } else {
-        failed++;
-        try {
-          const data = await res.json();
-          errors.push(`${user.username}: ${data.error || "Lỗi không xác định"}`);
-        } catch {
-          errors.push(`${user.username}: Lỗi không xác định`);
+        if (res.ok) {
+          success++;
+          continue;
         }
+
+        failed++;
+        errors.push(`${user.username}: ${await readApiError(res, "Lỗi không xác định")}`);
+      } catch {
+        failed++;
+        errors.push(`${user.username}: Lỗi kết nối`);
       }
     }
 
@@ -204,21 +216,27 @@ export default function UsersPage() {
   const handleDeleteUser = async () => {
     if (!userToDelete) return;
     setIsSubmitting(true);
+    setDeleteError("");
 
     try {
       const res = await fetch(`/cs116.khtn/api/users/${userToDelete.id}`, {
         method: "DELETE",
       });
 
-      if (res.ok) {
-        setShowDeleteModal(false);
-        setUserToDelete(null);
-        fetchUsers();
+      if (!res.ok) {
+        setDeleteError(await readApiError(res, "Lỗi khi xóa người dùng"));
+        return;
       }
+
+      setShowDeleteModal(false);
+      setUserToDelete(null);
+      fetchUsers();
     } catch (error) {
       console.error("Delete error:", error);
+      setDeleteError("Lỗi kết nối");
+    } finally {
+      setIsSubmitting(false);
     }
-    setIsSubmitting(false);
   };
 
   return (
@@ -232,7 +250,10 @@ export default function UsersPage() {
         </div>
         <div className="flex gap-3">
         <button
-          onClick={() => setShowCreateModal(true)}
+          onClick={() => {
+            setFormError("");
+            setShowCreateModal(true);
+          }}
           className="flex items-center gap-2 px-6 py-2.5 bg-gradient-to-br from-primary to-primary-container text-on-primary rounded-lg font-semibold text-sm hover:shadow-lg transition-all"
         >
           <UserPlus className="w-4 h-4" />
@@ -252,6 +273,12 @@ export default function UsersPage() {
         </button>
         </div>
       </header>
+
+      {pageError && (
+        <div className="mb-4 rounded-lg bg-error-container/20 px-4 py-3 text-sm text-error">
+          {pageError}
+        </div>
+      )}
 
       {/* Search */}
       <div className="mb-6 flex items-center gap-4">
@@ -330,6 +357,7 @@ export default function UsersPage() {
                     </Link>
                     <button
                       onClick={() => {
+                        setDeleteError("");
                         setUserToDelete(user);
                         setShowDeleteModal(true);
                       }}
@@ -471,6 +499,7 @@ export default function UsersPage() {
             onClick={() => {
               setShowDeleteModal(false);
               setUserToDelete(null);
+              setDeleteError("");
             }}
           />
           <div className="relative bg-surface-container-lowest rounded-2xl shadow-xl w-full max-w-md p-6">
@@ -484,6 +513,11 @@ export default function UsersPage() {
                 <br />
                 <span className="text-sm text-error">Tất cả bài nộp của họ cũng sẽ bị xóa.</span>
               </p>
+              {deleteError && (
+                <div className="mb-4 rounded-lg bg-error-container/20 px-4 py-2 text-sm text-error">
+                  {deleteError}
+                </div>
+              )}
             </div>
 
             <div className="flex gap-3">
@@ -491,6 +525,7 @@ export default function UsersPage() {
                 onClick={() => {
                   setShowDeleteModal(false);
                   setUserToDelete(null);
+                  setDeleteError("");
                 }}
                 className="flex-1 px-4 py-2 bg-surface-container-high text-on-surface-variant rounded-lg font-medium hover:bg-surface-container-high/80 transition-colors"
               >

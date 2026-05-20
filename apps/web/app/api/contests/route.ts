@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { requireAdminApi } from "@/lib/guard";
-import { parseDailySubmissionLimit } from "./validation";
+import { parseContestDeadline, parseDailySubmissionLimit } from "./validation";
 
 export async function GET() {
   const guard = await requireAdminApi();
@@ -37,9 +37,21 @@ export async function POST(request: Request) {
   if (guard instanceof Response) return guard;
 
   try {
-    const body = await request.json();
-    const { title, description, deadline, status, dailySubmissionLimit } = body;
-    const parsedLimit = parseDailySubmissionLimit(dailySubmissionLimit);
+    const body = await request.json().catch(() => null);
+    if (!body || typeof body !== "object" || Array.isArray(body)) {
+      return NextResponse.json(
+        { ok: false, error: "Invalid JSON body" },
+        { status: 400 }
+      );
+    }
+
+    const input = body as Record<string, unknown>;
+    const title = typeof input.title === "string" ? input.title.trim() : "";
+    const description =
+      typeof input.description === "string" ? input.description : "";
+    const status = typeof input.status === "string" ? input.status : "ongoing";
+    const parsedLimit = parseDailySubmissionLimit(input.dailySubmissionLimit);
+    const parsedDeadline = parseContestDeadline(input.deadline);
 
     if (!title) {
       return NextResponse.json(
@@ -53,19 +65,18 @@ export async function POST(request: Request) {
         { status: 400 }
       );
     }
+    if (!parsedDeadline.ok) {
+      return NextResponse.json(
+        { ok: false, error: parsedDeadline.error },
+        { status: 400 }
+      );
+    }
 
     const contest = await prisma.contest.create({
       data: {
         title,
         description: description || null,
-        deadline: deadline
-          ? (() => {
-              const [date, time] = deadline.split("T");
-              const [y, m, d] = date.split("-").map(Number);
-              const [h, min] = time.split(":").map(Number);
-              return new Date(Date.UTC(y, m - 1, d, h, min));
-            })()
-          : null,
+        deadline: parsedDeadline.value ?? null,
         status: status || "ongoing",
         dailySubmissionLimit: parsedLimit.value ?? null,
       },

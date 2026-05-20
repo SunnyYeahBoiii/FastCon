@@ -3,6 +3,7 @@
 import { Search, Edit, Trash2, Plus, X, Upload } from "lucide-react";
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { readApiError, readApiJson } from "@/lib/apiClient";
 
 interface Contest {
   id: string;
@@ -31,6 +32,7 @@ export default function ContestsPage() {
   const [contests, setContests] = useState<Contest[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
+  const [error, setError] = useState("");
   const [showModal, setShowModal] = useState(false);
   const [formData, setFormData] = useState<ContestFormData>({
     title: "",
@@ -47,14 +49,21 @@ export default function ContestsPage() {
   }, []);
 
   const fetchContests = async () => {
+    setError("");
     try {
       const response = await fetch("/cs116.khtn/api/contests");
-      const data = await response.json();
-      if (data.ok) {
-        setContests(data.contests);
+      if (!response.ok) {
+        throw new Error(await readApiError(response, "Không thể tải danh sách cuộc thi"));
       }
+      const data = await readApiJson<{ ok?: boolean; contests?: Contest[]; error?: string }>(response);
+      if (!data?.ok) {
+        throw new Error(data?.error || "Không thể tải danh sách cuộc thi");
+      }
+      setContests(data.contests || []);
     } catch (error) {
       console.error("Fetch contests error:", error);
+      setContests([]);
+      setError(error instanceof Error ? error.message : "Không thể tải danh sách cuộc thi");
     } finally {
       setLoading(false);
     }
@@ -78,16 +87,28 @@ export default function ContestsPage() {
         body: JSON.stringify(formData),
       });
 
-      const data = await response.json();
-      if (data.ok) {
+      if (!response.ok) {
+        alert(await readApiError(response, "Không thể tạo cuộc thi"));
+        return;
+      }
+      const data = await readApiJson<{
+        ok?: boolean;
+        error?: string;
+        contest?: { id?: string };
+      }>(response);
+      if (data?.ok && data.contest?.id) {
         // Upload ground truth file if provided
-        if (groundTruthFile && data.contest.id) {
+        if (groundTruthFile) {
           const gtFormData = new FormData();
           gtFormData.append("file", groundTruthFile);
-          await fetch(`/cs116.khtn/api/contests/${data.contest.id}/ground-truth`, {
+          const uploadResponse = await fetch(`/cs116.khtn/api/contests/${data.contest.id}/ground-truth`, {
             method: "POST",
             body: gtFormData,
           });
+          if (!uploadResponse.ok) {
+            alert(await readApiError(uploadResponse, "Không thể upload file ground truth"));
+            return;
+          }
         }
         setShowModal(false);
         setFormData({
@@ -100,7 +121,7 @@ export default function ContestsPage() {
         setGroundTruthFile(null);
         fetchContests();
       } else {
-        alert(data.error || "Không thể tạo cuộc thi");
+        alert(data?.error || "Không thể tạo cuộc thi");
       }
     } catch (error) {
       console.error("Create contest error:", error);
@@ -120,11 +141,15 @@ export default function ContestsPage() {
         method: "DELETE",
       });
 
-      const data = await response.json();
-      if (data.ok) {
+      if (!response.ok) {
+        alert(await readApiError(response, "Không thể xóa cuộc thi"));
+        return;
+      }
+      const data = await readApiJson<{ ok?: boolean; error?: string }>(response);
+      if (data?.ok) {
         fetchContests();
       } else {
-        alert(data.error || "Không thể xóa cuộc thi");
+        alert(data?.error || "Không thể xóa cuộc thi");
       }
     } catch (error) {
       console.error("Delete contest error:", error);
@@ -158,6 +183,12 @@ export default function ContestsPage() {
           Cuộc thi mới
         </button>
       </header>
+
+      {error && (
+        <div className="mb-4 rounded-lg bg-error-container/20 px-4 py-3 text-sm text-error">
+          {error}
+        </div>
+      )}
 
       {/* Search */}
       <div className="mb-6 flex items-center gap-4">

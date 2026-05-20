@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { Search, X } from "lucide-react";
+import { readApiError, readApiJson } from "@/lib/apiClient";
 
 interface User {
   id: string;
@@ -99,6 +100,8 @@ export default function SubmissionsPage() {
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [detail, setDetail] = useState<SubmissionDetail | null>(null);
+  const [pageError, setPageError] = useState("");
+  const [detailError, setDetailError] = useState("");
   const [rerunning, setRerunning] = useState<string | null>(null);
 
   const [searchQuery, setSearchQuery] = useState("");
@@ -106,19 +109,32 @@ export default function SubmissionsPage() {
   const [selectedStatus, setSelectedStatus] = useState("");
 
   const fetchData = useCallback(async () => {
+    setPageError("");
     try {
       const [subRes, usersRes] = await Promise.all([
         fetch("/cs116.khtn/api/submissions"),
         fetch("/cs116.khtn/api/users"),
       ]);
-      const subData = await subRes.json();
-      const usersData = await usersRes.json();
-      setSubmissions(subData.submissions || []);
-      setUsers(usersData.users || []);
+
+      if (!subRes.ok) {
+        throw new Error(await readApiError(subRes, "Không thể tải danh sách bài nộp"));
+      }
+      if (!usersRes.ok) {
+        throw new Error(await readApiError(usersRes, "Không thể tải danh sách người dùng"));
+      }
+
+      const subData = await readApiJson<{ submissions?: Submission[] }>(subRes);
+      const usersData = await readApiJson<{ users?: User[] }>(usersRes);
+      setSubmissions(subData?.submissions || []);
+      setUsers(usersData?.users || []);
     } catch (e) {
       console.error("Fetch error:", e);
+      setSubmissions([]);
+      setUsers([]);
+      setPageError(e instanceof Error ? e.message : "Không thể tải dữ liệu bài nộp");
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   }, []);
 
   useEffect(() => { fetchData(); }, [fetchData]);
@@ -179,24 +195,46 @@ export default function SubmissionsPage() {
   }, []);
 
   const handleViewDetail = async (id: string) => {
-    const res = await fetch(`/cs116.khtn/api/submissions/${id}`);
-    const data = await res.json();
-    if (data.ok) setDetail(data.submission);
+    setPageError("");
+    setDetailError("");
+    try {
+      const res = await fetch(`/cs116.khtn/api/submissions/${id}`);
+      if (!res.ok) {
+        throw new Error(await readApiError(res, "Không thể tải chi tiết bài nộp"));
+      }
+      const data = await readApiJson<{ ok?: boolean; submission?: SubmissionDetail; error?: string }>(res);
+      if (!data?.ok || !data.submission) {
+        throw new Error(data?.error || "Không thể tải chi tiết bài nộp");
+      }
+      setDetail(data.submission);
+    } catch (error) {
+      console.error("Fetch submission detail error:", error);
+      setPageError(
+        error instanceof Error ? error.message : "Không thể tải chi tiết bài nộp"
+      );
+    }
   };
 
   const handleRerun = async (id: string) => {
     setRerunning(id);
+    setDetailError("");
     try {
       const res = await fetch(`/cs116.khtn/api/submissions/${id}/rerun`, { method: "POST" });
-      const data = await res.json();
-      if (data.ok) {
-        fetchData();
-        setDetail(null);
+      if (!res.ok) {
+        throw new Error(await readApiError(res, "Không thể gửi yêu cầu chấm lại"));
       }
+      const data = await readApiJson<{ ok?: boolean; error?: string }>(res);
+      if (!data?.ok) {
+        throw new Error(data?.error || "Không thể gửi yêu cầu chấm lại");
+      }
+      fetchData();
+      setDetail(null);
     } catch (e) {
       console.error("Rerun error:", e);
+      setDetailError(e instanceof Error ? e.message : "Không thể gửi yêu cầu chấm lại");
+    } finally {
+      setRerunning(null);
     }
-    setRerunning(null);
   };
 
   const filteredSubmissions = submissions.filter((s) => {
@@ -225,6 +263,12 @@ export default function SubmissionsPage() {
           <p className="text-on-surface-variant font-medium">Theo dõi và quản lý các bài nộp từ người dự thi.</p>
         </div>
       </header>
+
+      {pageError && (
+        <div className="mb-4 rounded-lg bg-error-container/20 px-4 py-3 text-sm text-error">
+          {pageError}
+        </div>
+      )}
 
       <div className="mb-6 flex items-center gap-4">
         <div className="relative">
@@ -301,13 +345,25 @@ export default function SubmissionsPage() {
       </div>
 
       {/* Detail Modal */}
-      {detail && <DetailModal detail={detail} onClose={() => setDetail(null)} onRerun={() => handleRerun(detail.id)} rerunning={rerunning === detail.id} />}
+      {detail && (
+        <DetailModal
+          detail={detail}
+          actionError={detailError}
+          onClose={() => {
+            setDetail(null);
+            setDetailError("");
+          }}
+          onRerun={() => handleRerun(detail.id)}
+          rerunning={rerunning === detail.id}
+        />
+      )}
     </div>
   );
 }
 
-function DetailModal({ detail, onClose, onRerun, rerunning }: {
+function DetailModal({ detail, actionError, onClose, onRerun, rerunning }: {
   detail: SubmissionDetail;
+  actionError: string;
   onClose: () => void;
   onRerun: () => void;
   rerunning: boolean;
@@ -357,6 +413,12 @@ function DetailModal({ detail, onClose, onRerun, rerunning }: {
           <div className="text-xs text-on-surface-variant pt-2">Nộp lúc: {formatDate(detail.createdAt)} {formatTime(detail.createdAt)}</div>
 
           {detail.status === "failed" && (
+            <>
+            {actionError && (
+              <div className="mt-4 rounded-lg bg-error-container/20 px-4 py-2 text-sm text-error">
+                {actionError}
+              </div>
+            )}
             <button
               onClick={onRerun}
               disabled={rerunning}
@@ -364,6 +426,7 @@ function DetailModal({ detail, onClose, onRerun, rerunning }: {
             >
               {rerunning ? "Đang gửi lại..." : "Chấm lại"}
             </button>
+            </>
           )}
         </div>
       </div>

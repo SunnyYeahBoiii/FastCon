@@ -15,6 +15,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useState } from "react";
 import { ThemeToggle } from "@/components/ThemeToggle";
+import { readApiError } from "@/lib/apiClient";
 
 const adminNavItems = [
   {
@@ -45,16 +46,26 @@ export default function AdminLayout({
   const pathname = usePathname();
   const router = useRouter();
   const [collapsed, setCollapsed] = useState(false);
+  const [logoutError, setLogoutError] = useState("");
   const sidebarWidth = collapsed ? SIDEBAR_COLLAPSED : SIDEBAR_EXPANDED;
 
   const handleLogout = async () => {
-    await fetch("/cs116.khtn/api/logout", { method: "POST" });
-    router.replace("/login");
-    router.refresh();
+    setLogoutError("");
+    try {
+      const response = await fetch("/cs116.khtn/api/logout", { method: "POST" });
+      if (!response.ok) {
+        throw new Error(await readApiError(response, "Không thể đăng xuất"));
+      }
+      router.replace("/login");
+      router.refresh();
+    } catch (error) {
+      console.error("Logout error:", error);
+      setLogoutError(error instanceof Error ? error.message : "Không thể đăng xuất");
+    }
   };
 
   return (
-    <div className="min-h-full flex">
+    <div className="flex h-screen min-h-0 overflow-hidden">
       {/* Sidebar */}
       <aside
         className="fixed left-0 top-0 bottom-0 bg-surface-container-low flex flex-col overflow-hidden transition-all duration-300"
@@ -138,13 +149,19 @@ export default function AdminLayout({
               Đăng xuất
             </span>
           </button>
+          {logoutError && !collapsed && (
+            <div className="px-3 text-xs text-error">{logoutError}</div>
+          )}
         </div>
       </aside>
 
       {/* Main Content Area */}
       <div
-        className="flex-1 flex flex-col min-h-full transition-all duration-300"
-        style={{ marginLeft: sidebarWidth }}
+        className="flex h-full min-h-0 flex-col transition-all duration-300"
+        style={{
+          marginLeft: sidebarWidth,
+          width: `calc(100% - ${sidebarWidth}px)`,
+        }}
       >
         {/* Top Header */}
         <header className="sticky top-0 z-40 bg-surface/80 backdrop-blur-xl border-b border-outline-variant/20">
@@ -173,7 +190,7 @@ export default function AdminLayout({
         </header>
 
         {/* Main Content */}
-        <main className="flex-1 overflow-y-auto bg-surface">{children}</main>
+        <main className="flex-1 min-h-0 overflow-y-auto bg-surface">{children}</main>
       </div>
     </div>
   );

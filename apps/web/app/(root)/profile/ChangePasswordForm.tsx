@@ -2,6 +2,7 @@
 
 import { FormEvent, useState } from "react";
 import { KeyRound } from "lucide-react";
+import { readApiError } from "@/lib/apiClient";
 
 export default function ChangePasswordForm() {
   const [currentPassword, setCurrentPassword] = useState("");
@@ -41,8 +42,7 @@ export default function ChangePasswordForm() {
       });
 
       if (!response.ok) {
-        const data = await response.json();
-        setError(data.error || "Lỗi khi đổi mật khẩu");
+        setError(await readApiError(response, "Lỗi khi đổi mật khẩu"));
         return;
       }
 

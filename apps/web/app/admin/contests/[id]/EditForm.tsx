@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { readApiError, readApiJson } from "@/lib/apiClient";
 
 interface Contest {
   id: string;
@@ -29,9 +30,11 @@ export default function EditForm({ contest }: { contest: Contest }) {
     status: contest.status,
   });
   const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
 
   const handleSave = async () => {
     setSaving(true);
+    setError("");
     try {
       const response = await fetch(`/cs116.khtn/api/contests/${contest.id}`, {
         method: "PUT",
@@ -39,15 +42,19 @@ export default function EditForm({ contest }: { contest: Contest }) {
         body: JSON.stringify(formData),
       });
 
-      const data = await response.json();
-      if (data.ok) {
+      if (!response.ok) {
+        setError(await readApiError(response, "Không thể cập nhật cuộc thi"));
+        return;
+      }
+      const data = await readApiJson<{ ok?: boolean; error?: string }>(response);
+      if (data?.ok) {
         router.refresh();
       } else {
-        alert(data.error || "Không thể cập nhật cuộc thi");
+        setError(data?.error || "Không thể cập nhật cuộc thi");
       }
     } catch (error) {
       console.error("Update contest error:", error);
-      alert("Không thể cập nhật cuộc thi");
+      setError("Không thể cập nhật cuộc thi");
     } finally {
       setSaving(false);
     }
@@ -61,6 +68,12 @@ export default function EditForm({ contest }: { contest: Contest }) {
         </span>
         Chỉnh sửa thông tin
       </h2>
+
+      {error && (
+        <div className="mb-4 rounded-lg bg-error-container/20 px-4 py-2 text-sm text-error">
+          {error}
+        </div>
+      )}
 
       <div className="space-y-4">
         <div>

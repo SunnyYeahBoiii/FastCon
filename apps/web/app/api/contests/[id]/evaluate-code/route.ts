@@ -41,9 +41,16 @@ export async function PUT(
 
   try {
     const { id } = params;
-    const body = await request.json();
-    const { evaluateCode } = body as { evaluateCode?: string | null };
-    const nextEvaluateCode = evaluateCode ?? null;
+    const body = await request.json().catch(() => null);
+    if (!body || typeof body !== "object" || Array.isArray(body)) {
+      return NextResponse.json(
+        { ok: false, error: "Invalid JSON body" },
+        { status: 400 }
+      );
+    }
+    const input = body as { evaluateCode?: unknown };
+    const nextEvaluateCode =
+      typeof input.evaluateCode === "string" ? input.evaluateCode : null;
 
     const contest = await prisma.contest.findUnique({
       where: { id },

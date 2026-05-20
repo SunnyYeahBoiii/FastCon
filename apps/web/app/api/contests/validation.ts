@@ -2,6 +2,10 @@ type ParseLimitResult =
   | { ok: true; value: number | null | undefined }
   | { ok: false; error: string };
 
+type ParseDeadlineResult =
+  | { ok: true; value: Date | null | undefined }
+  | { ok: false; error: string };
+
 export function parseDailySubmissionLimit(value: unknown): ParseLimitResult {
   if (value === undefined) {
     return { ok: true, value: undefined };
@@ -35,4 +39,42 @@ export function parseDailySubmissionLimit(value: unknown): ParseLimitResult {
   }
 
   return { ok: false, error: "Submission limit must be a positive integer" };
+}
+
+export function parseContestDeadline(value: unknown): ParseDeadlineResult {
+  if (value === undefined) {
+    return { ok: true, value: undefined };
+  }
+
+  if (value === null || value === "") {
+    return { ok: true, value: null };
+  }
+
+  if (typeof value !== "string") {
+    return { ok: false, error: "Deadline must be a valid datetime" };
+  }
+
+  const match = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})$/.exec(value);
+  if (!match) {
+    return { ok: false, error: "Deadline must be a valid datetime" };
+  }
+
+  const year = Number(match[1] ?? "");
+  const month = Number(match[2] ?? "");
+  const day = Number(match[3] ?? "");
+  const hour = Number(match[4] ?? "");
+  const minute = Number(match[5] ?? "");
+
+  const deadline = new Date(Date.UTC(year, month - 1, day, hour, minute));
+  if (
+    deadline.getUTCFullYear() !== year ||
+    deadline.getUTCMonth() !== month - 1 ||
+    deadline.getUTCDate() !== day ||
+    deadline.getUTCHours() !== hour ||
+    deadline.getUTCMinutes() !== minute
+  ) {
+    return { ok: false, error: "Deadline must be a valid datetime" };
+  }
+
+  return { ok: true, value: deadline };
 }

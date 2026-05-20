@@ -112,7 +112,13 @@ export async function POST(request: Request, { params }: RouteParams) {
   if (guard instanceof Response) return guard;
 
   try {
-    const body = await request.json();
+    const body = await request.json().catch(() => null);
+    if (!body || typeof body !== "object" || Array.isArray(body)) {
+      return NextResponse.json(
+        { ok: false, error: "Invalid JSON body" },
+        { status: 400 }
+      );
+    }
     const userId = typeof body?.userId === "string" ? body.userId : "";
     if (!userId) {
       return NextResponse.json(

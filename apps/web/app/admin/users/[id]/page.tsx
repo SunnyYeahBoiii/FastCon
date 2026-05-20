@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { ArrowLeft, KeyRound, FileCheck, Trophy } from "lucide-react";
 import Link from "next/link";
+import { readApiError, readApiJson } from "@/lib/apiClient";
 
 interface User {
   id: string;
@@ -83,6 +84,7 @@ function getStatusText(status: string): string {
 export default function UserDetailPage({ params }: { params: { id: string } }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  const [pageError, setPageError] = useState("");
   const userId = params.id;
 
   // Password form state
@@ -96,15 +98,22 @@ export default function UserDetailPage({ params }: { params: { id: string } }) {
     const fetchUser = async () => {
       try {
         const res = await fetch(`/cs116.khtn/api/users/${userId}`);
-        const data = await res.json();
-        setUser(data.user);
+        if (!res.ok) {
+          throw new Error(await readApiError(res, "Không thể tải thông tin người dùng"));
+        }
+        const data = await readApiJson<{ user?: User }>(res);
+        setUser(data?.user ?? null);
       } catch (error) {
         console.error("Fetch user error:", error);
+        setPageError(
+          error instanceof Error ? error.message : "Không thể tải thông tin người dùng"
+        );
+      } finally {
+        setLoading(false);
       }
-      setLoading(false);
     };
 
-    fetchUser();
+    void fetchUser();
   }, [userId]);
 
   const handleUpdatePassword = async (e: React.FormEvent) => {
@@ -136,18 +145,18 @@ export default function UserDetailPage({ params }: { params: { id: string } }) {
         setNewPassword("");
         setConfirmPassword("");
       } else {
-        const data = await res.json();
-        setPasswordError(data.error || "Lỗi khi cập nhật mật khẩu");
+        setPasswordError(await readApiError(res, "Lỗi khi cập nhật mật khẩu"));
       }
     } catch (error) {
       setPasswordError("Lỗi kết nối");
+    } finally {
+      setIsUpdatingPassword(false);
     }
-    setIsUpdatingPassword(false);
   };
 
   if (loading) {
     return (
-      <div className="p-8 flex items-center justify-center min-h-[400px]">
+      <div className="p-4 flex items-center justify-center min-h-[400px]">
         <div className="text-on-surface-variant">Đang tải...</div>
       </div>
     );
@@ -155,25 +164,27 @@ export default function UserDetailPage({ params }: { params: { id: string } }) {
 
   if (!user) {
     return (
-      <div className="p-8 flex items-center justify-center min-h-[400px]">
-        <div className="text-on-surface-variant">Không tìm thấy người dùng</div>
+      <div className="p-4 flex items-center justify-center min-h-[400px]">
+        <div className="rounded-lg bg-error-container/20 px-4 py-3 text-sm text-error">
+          {pageError || "Không tìm thấy người dùng"}
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="p-8 max-w-4xl mx-auto">
+    <div className="flex h-full min-h-full w-full max-w-none flex-col gap-3 p-3 sm:p-4">
       {/* Back Button */}
       <Link
         href="/admin/users"
-        className="inline-flex items-center gap-2 text-on-surface-variant hover:text-primary transition-colors mb-6"
+        className="inline-flex items-center gap-2 text-on-surface-variant hover:text-primary transition-colors"
       >
         <ArrowLeft className="w-4 h-4" />
         Quay lại danh sách
       </Link>
 
       {/* User Info Card */}
-      <div className="bg-surface-container-lowest rounded-xl shadow-[0_4px_24px_rgba(25,28,30,0.04)] p-6 mb-6">
+      <div className="bg-surface-container-lowest rounded-xl shadow-[0_4px_24px_rgba(25,28,30,0.04)] p-4">
         <div className="flex items-center gap-4 mb-4">
           <div className="w-16 h-16 rounded-full bg-secondary-container text-on-secondary-container flex items-center justify-center font-bold text-xl">
             {getInitials(user.name)}
@@ -203,10 +214,12 @@ export default function UserDetailPage({ params }: { params: { id: string } }) {
       </div>
 
       {/* Password Reset Section */}
-      <div className="bg-surface-container-lowest rounded-xl shadow-[0_4px_24px_rgba(25,28,30,0.04)] p-6 mb-6">
+      <div className="bg-surface-container-lowest rounded-xl shadow-[0_4px_24px_rgba(25,28,30,0.04)] p-4">
         <div className="flex items-center gap-2 mb-4">
           <KeyRound className="w-5 h-5 text-primary" />
-          <h2 className="text-lg font-semibold text-on-surface">Đặt lại mật khẩu</h2>
+          <h2 className="text-lg font-semibold text-on-surface">
+            Đặt lại mật khẩu
+          </h2>
         </div>
 
         <form onSubmit={handleUpdatePassword} className="space-y-4">
@@ -257,8 +270,8 @@ export default function UserDetailPage({ params }: { params: { id: string } }) {
       </div>
 
       {/* Recent Submissions Table */}
-      <div className="bg-surface-container-lowest rounded-xl shadow-[0_4px_24px_rgba(25,28,30,0.04)] overflow-hidden">
-        <div className="p-6 border-b border-outline-variant/15">
+      <div className="flex min-h-[320px] flex-1 flex-col overflow-hidden rounded-xl bg-surface-container-lowest shadow-[0_4px_24px_rgba(25,28,30,0.04)]">
+        <div className="px-4 py-3 border-b border-outline-variant/15">
           <div className="flex items-center gap-2">
             <FileCheck className="w-5 h-5 text-primary" />
             <h2 className="text-lg font-semibold text-on-surface">Bài nộp gần đây</h2>
@@ -266,52 +279,63 @@ export default function UserDetailPage({ params }: { params: { id: string } }) {
         </div>
 
         {user.submissions.length === 0 ? (
-          <div className="p-8 text-center text-on-surface-variant">
+          <div className="p-4 text-center text-on-surface-variant">
             <FileCheck className="w-12 h-12 mx-auto mb-2 text-on-surface-variant/50" />
             <p>Người dùng chưa có bài nộp nào</p>
           </div>
         ) : (
-          <table className="w-full text-left border-collapse">
-            <thead>
-              <tr className="bg-surface-container-low text-on-surface-variant font-semibold text-sm border-b border-outline-variant/15">
-                <th className="py-3 px-6 font-medium">Cuộc thi</th>
-                <th className="py-3 px-6 font-medium">File</th>
-                <th className="py-3 px-6 font-medium">Điểm</th>
-                <th className="py-3 px-6 font-medium">Trạng thái</th>
-                <th className="py-3 px-6 font-medium">Thời gian</th>
-              </tr>
-            </thead>
-            <tbody className="text-sm divide-y divide-outline-variant/10">
-              {user.submissions.map((submission) => (
-                <tr key={submission.id} className="hover:bg-surface-container-low/50 transition-colors">
-                  <td className="py-4 px-6">
-                    <div className="flex items-center gap-2">
-                      <Trophy className="w-4 h-4 text-primary" />
-                      <span className="font-medium text-on-surface">{submission.contest.title}</span>
-                    </div>
-                  </td>
-                  <td className="py-4 px-6 text-on-surface-variant">{submission.filename}</td>
-                  <td className="py-4 px-6">
-                    {submission.score !== null ? (
-                      <span className="font-medium text-primary">{submission.score.toFixed(2)}</span>
-                    ) : (
-                      <span className="text-on-surface-variant">--</span>
-                    )}
-                  </td>
-                  <td className="py-4 px-6">
-                    <span
-                      className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium whitespace-nowrap ${getStatusColor(
-                        submission.status
-                      )}`}
-                    >
-                      {getStatusText(submission.status)}
-                    </span>
-                  </td>
-                  <td className="py-4 px-6 text-on-surface-variant">{formatDate(submission.createdAt)}</td>
+          <div className="min-h-0 flex-1 overflow-auto">
+            <table className="min-w-[1200px] w-full text-left border-collapse">
+              <thead className="sticky top-0 z-10">
+                <tr className="bg-surface-container-low text-on-surface-variant font-semibold text-sm border-b border-outline-variant/15">
+                  <th className="py-3 px-6 font-medium">Cuộc thi</th>
+                  <th className="py-3 px-6 font-medium">File</th>
+                  <th className="py-3 px-6 font-medium whitespace-nowrap">Điểm</th>
+                  <th className="py-3 px-6 font-medium whitespace-nowrap">Trạng thái</th>
+                  <th className="py-3 px-6 font-medium whitespace-nowrap">Thời gian</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody className="text-sm divide-y divide-outline-variant/10">
+                {user.submissions.map((submission) => (
+                  <tr
+                    key={submission.id}
+                    className="hover:bg-surface-container-low/50 transition-colors"
+                  >
+                    <td className="py-4 px-6 min-w-[300px]">
+                      <div className="flex items-center gap-2">
+                        <Trophy className="w-4 h-4 flex-shrink-0 text-primary" />
+                        <span className="font-medium text-on-surface">
+                          {submission.contest.title}
+                        </span>
+                      </div>
+                    </td>
+                    <td className="py-4 px-6 min-w-[360px] text-on-surface-variant">
+                      <span className="font-mono text-xs">{submission.filename}</span>
+                    </td>
+                    <td className="py-4 px-6 whitespace-nowrap">
+                      {submission.score !== null ? (
+                        <span className="font-medium text-primary">{submission.score.toFixed(2)}</span>
+                      ) : (
+                        <span className="text-on-surface-variant">--</span>
+                      )}
+                    </td>
+                    <td className="py-4 px-6 whitespace-nowrap">
+                      <span
+                        className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium whitespace-nowrap ${getStatusColor(
+                          submission.status
+                        )}`}
+                      >
+                        {getStatusText(submission.status)}
+                      </span>
+                    </td>
+                    <td className="py-4 px-6 whitespace-nowrap text-on-surface-variant">
+                      {formatDate(submission.createdAt)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
       </div>
     </div>

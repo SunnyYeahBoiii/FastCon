@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { requireAdminApi } from "@/lib/guard";
-import { parseDailySubmissionLimit } from "../validation";
+import { parseContestDeadline, parseDailySubmissionLimit } from "../validation";
 
 export async function GET(
   request: Request,
@@ -51,9 +51,21 @@ export async function PUT(
 
   try {
     const { id } = params;
-    const body = await request.json();
-    const { title, description, deadline, status, dailySubmissionLimit } = body;
-    const parsedLimit = parseDailySubmissionLimit(dailySubmissionLimit);
+    const body = await request.json().catch(() => null);
+    if (!body || typeof body !== "object" || Array.isArray(body)) {
+      return NextResponse.json(
+        { ok: false, error: "Invalid JSON body" },
+        { status: 400 }
+      );
+    }
+
+    const input = body as Record<string, unknown>;
+    const title = typeof input.title === "string" ? input.title.trim() : undefined;
+    const description =
+      typeof input.description === "string" ? input.description : undefined;
+    const status = typeof input.status === "string" ? input.status : undefined;
+    const parsedLimit = parseDailySubmissionLimit(input.dailySubmissionLimit);
+    const parsedDeadline = parseContestDeadline(input.deadline);
 
     const contest = await prisma.contest.findUnique({
       where: { id },
@@ -71,20 +83,22 @@ export async function PUT(
         { status: 400 }
       );
     }
+    if (!parsedDeadline.ok) {
+      return NextResponse.json(
+        { ok: false, error: parsedDeadline.error },
+        { status: 400 }
+      );
+    }
 
     const updatedContest = await prisma.contest.update({
       where: { id },
       data: {
         title: title ?? contest.title,
         description: description ?? contest.description,
-        deadline: deadline
-          ? (() => {
-              const [date, time] = deadline.split("T");
-              const [y, m, d] = date.split("-").map(Number);
-              const [h, min] = time.split(":").map(Number);
-              return new Date(Date.UTC(y, m - 1, d, h, min));
-            })()
-          : contest.deadline,
+        deadline:
+          parsedDeadline.value === undefined
+            ? contest.deadline
+            : parsedDeadline.value,
         status: status ?? contest.status,
         dailySubmissionLimit:
           parsedLimit.value === undefined
