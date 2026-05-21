@@ -83,6 +83,11 @@ class BuildLeaderboardTests(unittest.TestCase):
         self.assertEqual(leaderboard[1]["userId"], "u1")
         self.assertEqual(leaderboard[1]["recordPoints"], get_points_from_rank(2))
 
+    def test_record_points_decrease_one_point_per_rank_until_zero(self) -> None:
+        record_points = [get_points_from_rank(rank) for rank in range(0, 13)]
+
+        self.assertEqual(record_points, [0, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0, 0])
+
 
 class FetchLeaderboardRowsTests(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self) -> None:

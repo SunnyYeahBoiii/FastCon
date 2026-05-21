@@ -90,15 +90,9 @@ def quota_snapshot_payload(snapshot: dict[str, Any]) -> dict[str, Any]:
 
 
 def get_points_from_rank(rank: int) -> int:
-    if rank == 1:
-        return 10
-    if rank <= 3:
-        return 9
-    if rank <= 6:
-        return 8
-    if rank <= 11:
-        return 7
-    return 0
+    if rank < 1:
+        return 0
+    return max(11 - rank, 0)
 
 
 def build_leaderboard(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
