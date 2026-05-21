@@ -1,273 +1,203 @@
 # FastCons
 
-FastCons is a contest evaluation platform built as an npm workspace. It combines a public Next.js application, an internal FastAPI service, a shared SQLite database, and a Python-based judge worker to support contest management, file submissions, grading, and real-time result updates.
+FastCons là hệ thống quản lý và chấm điểm contest nội bộ cho các bài nộp dạng `.pkl`. Ứng dụng cho phép admin tạo contest, cấu hình ground truth và mã chấm điểm Python, contestant nộp file, theo dõi trạng thái chấm điểm bất đồng bộ và xem leaderboard.
 
-For day-to-day onboarding, this repository is intended to be used through two root scripts:
+## Tổng quan
 
-- `./first-run.sh`: bootstrap the machine and initialize the project
-- `./start-application.sh`: build and run the full local application stack
+FastCons được tách thành hai runtime chính:
 
-## What This Repository Contains
+- `apps/web`: ứng dụng Next.js App Router phục vụ giao diện, auth/session, admin CRUD, Prisma và các route handler public.
+- `apps/api`: FastAPI service nội bộ phụ trách upload streaming/chunked upload, hàng đợi submission, worker chấm điểm, SSE/broadcast và leaderboard API.
 
-FastCons is split into two runtime applications:
+Trang web mặc định chạy tại `http://localhost:3000`. FastAPI nội bộ chạy tại `http://127.0.0.1:8010` và thường được gọi thông qua Next.js proxy/rewrite.
 
-- `apps/web`: the public-facing Next.js 16 application
-- `apps/api`: the internal FastAPI service used for submission processing and streaming updates
+## Tính năng chính
 
-Both applications share the same SQLite database at the repository root and the same filesystem storage directory under `storage/`.
+- Đăng nhập bằng username/password với hai vai trò: `admin` và `contestant`.
+- Contestant xem danh sách contest, nộp file `.pkl`, xem lịch sử/trạng thái submission, leaderboard và đổi mật khẩu cá nhân.
+- Admin quản lý contest, user, submission, deadline, status, giới hạn nộp bài mỗi ngày, ground truth và evaluate code.
+- Upload hỗ trợ Flow.js/chunked upload, theo dõi tiến độ, reserve submission trước khi đầy đủ file.
+- Submission được chấm bất đồng bộ bằng worker Python và script judge riêng.
+- Leaderboard lấy điểm từ submission đã chấm mới nhất của contestant trong từng contest.
+- Quota 24 giờ phân biệt rõ submission đang chờ chấm, đã tính quota và đã refund.
 
-## Architecture
+## Kiến trúc runtime
 
-### Runtime split
+```text
+Browser
+  |
+  | pages, auth, admin CRUD, public route handlers
+  v
+Next.js web app (:3000)
+  | \
+  |  \ Prisma -> dev.db
+  |
+  | /api/submissions/* streams request body
+  | /api/leaderboard/* middleware rewrite
+  v
+FastAPI internal API (:8010)
+  |
+  | worker queue + judge subprocess
+  v
+storage/submissions + storage/testdata
+```
 
-The codebase is intentionally divided by responsibility instead of putting everything behind a single server process.
+Trang, form và route handler thường nằm trong Next.js. Các request submission đi qua `apps/web/app/api/submissions/*` để stream body sang FastAPI bằng `FASTAPI_INTERNAL_URL`. Leaderboard API được rewrite từ `apps/web/middleware.ts` sang service nội bộ.
 
-- The Next.js app handles UI, page rendering, session cookie handling, admin CRUD flows, and Prisma-based access to SQLite.
-- The FastAPI app handles submission ingestion, queue processing, worker orchestration, submission status updates, and SSE streams for live updates.
-- The Python judge runs as a subprocess launched by the FastAPI worker when queued submissions are claimed.
+State dùng chung:
 
-### Why the split exists
+- SQLite database: `dev.db`
+- Thư mục runtime: `storage/`
+- File submission: `storage/submissions/`
+- Ground truth/test assets: `storage/testdata/`
 
-The public application and the judge pipeline have different runtime concerns:
+## Luồng submission
 
-- Next.js is a good fit for pages, forms, admin tooling, and authenticated route handlers.
-- FastAPI is a better fit for long-lived streaming responses, background worker coordination, and running the judge loop independently from page rendering.
-- Keeping the judge-facing logic in the internal API keeps the public app smaller and makes the submission pipeline easier to reason about.
+1. Contestant chọn contest và nộp file `.pkl`.
+2. Web app tạo/reserve submission và forward upload sang FastAPI.
+3. FastAPI validate tên file, nhận stream/chunk, merge file nếu cần và cập nhật tiến độ upload.
+4. Submission hoàn tất upload được đưa vào worker queue.
+5. Worker chạy judge subprocess với evaluate code và ground truth của contest.
+6. Kết quả chấm điểm cập nhật vào database, broadcast về client và hiển thị trên leaderboard.
 
-### Request flow
+Quy tắc domain quan trọng:
 
-There are two main request paths in the system.
+- Leaderboard score là điểm của submission `graded` mới nhất, không phải điểm cao nhất.
+- `Số lần nộp` trên leaderboard là số submission đã chấm thành công, không phải quota đã dùng.
+- Submission failed được refund quota.
+- Submission đang upload/đang chấm vẫn tính vào quota cho đến khi graded hoặc failed.
+- Admin rejudge không tạo submission mới và không đổi quota usage state.
 
-#### 1. Direct Next.js path
+## Công nghệ chính
 
-These routes are handled inside `apps/web` and usually talk to SQLite through Prisma:
+- Monorepo npm workspace + Turborepo.
+- Next.js `13.5.11`, React `18.2`, TypeScript, Tailwind CSS.
+- Prisma `5.22` với SQLite.
+- FastAPI, Uvicorn, aiosqlite, python-multipart.
+- CodeMirror cho editor evaluate code.
+- Flow.js cho chunked upload.
 
-- login/logout
-- admin contest management
-- admin user management
-- public contest listing
-
-In this path, the browser calls a Next.js route handler or loads a Next.js page, and the handler uses Prisma's SQLite datasource to access the shared database.
-
-#### 2. Proxied FastAPI path
-
-Submission routes are handled by a Next.js Route Handler that streams requests to FastAPI using `FASTAPI_INTERNAL_URL`:
-
-- `/api/submissions/*`
-
-Leaderboard routes are matched by `apps/web/middleware.ts` and rewritten from Next.js to the internal FastAPI service:
-
-- `/api/leaderboard/*`
-
-In this path, the browser talks to the same web origin by default. Submission upload requests enter a Node.js Route Handler so chunk bodies can be forwarded to FastAPI without parsing or buffering them in Next.js.
-
-### Submission lifecycle
-
-The end-to-end submission pipeline works like this:
-
-1. A logged-in user selects a `.pkl` file through the web app.
-2. The web app sends a small init request through Next.js so FastAPI validates contest state, records expected upload size, and reserves quota before file bytes are uploaded.
-3. The browser uploads the file in chunks through Next.js. Next.js streams each chunk to FastAPI, which appends it to a `.part` file under `storage/submissions`.
-4. If an upload is interrupted, the browser can query the server offset and resume from the last accepted byte.
-5. When all bytes are received, FastAPI atomically renames the `.part` file and marks the `Submission` row as `queued`.
-6. The FastAPI worker loop claims queued submissions up to `WORKER_MAX_CONCURRENT`.
-7. The worker launches `apps/api/scripts/judge_runner.py` as a subprocess using the configured Python interpreter.
-8. The judge writes results back to SQLite.
-9. FastAPI publishes updates to in-memory subscriber queues.
-10. Browsers receive live updates through SSE streams for submissions and leaderboard changes.
-
-### Shared state
-
-The repository uses a shared local state model:
-
-- `dev.db`: the single SQLite database used by both apps
-- `storage/submissions`: uploaded submission files
-- `storage/testdata`: test data used by evaluation logic
-- `apps/web/.env.local` and `apps/api/.env.local`: generated environment files with aligned paths and runtime configuration
-
-## Repository Layout
+## Cấu trúc thư mục
 
 ```text
 fast-con/
 ├── apps/
-│   ├── web/                     # Next.js 16 public app
-│   │   ├── app/                 # App Router pages and route handlers
-│   │   ├── components/          # Reusable UI components
-│   │   ├── lib/                 # Auth, guards, db, runtime config
-│   │   ├── prisma/              # Prisma schema and seed script
-│   │   └── middleware.ts        # Rewrite rules to FastAPI
-│   └── api/                     # Internal FastAPI service
-│       ├── backend/             # FastAPI app, auth, repositories, worker, SSE
-│       ├── scripts/             # Judge runner and Python helpers
-│       └── requirements.txt     # Python dependencies
+│   ├── web/
+│   │   ├── app/                 # Pages, layouts và route handlers
+│   │   ├── components/          # UI components dùng chung
+│   │   ├── lib/                 # Auth, session, db, config, quota helpers
+│   │   ├── prisma/              # Schema, migrations, seed
+│   │   └── middleware.ts        # Rewrite đến FastAPI
+│   └── api/
+│       ├── backend/             # FastAPI app, repositories, worker, streams
+│       ├── scripts/             # judge_runner.py và helper scripts
+│       ├── tests/               # Python tests
+│       └── requirements.txt
 ├── packages/
-│   ├── eslint-config/           # Shared lint config
-│   └── typescript-config/       # Shared TS config
-├── scripts/
-│   ├── setup.sh                 # Bootstrap source of truth
-│   ├── run.sh                   # Compatibility wrapper
-│   ├── run-web.sh               # Compatibility wrapper for web dev
-│   └── run-api.sh               # Compatibility wrapper for api dev
-├── storage/                     # Shared runtime filesystem state
-├── dev.db                       # Shared SQLite database
-├── start-application.sh         # Main local start flow
-├── first-run.sh                 # Main bootstrap entrypoint
-└── turbo.json                   # Turborepo task orchestration
+│   ├── eslint-config/
+│   └── typescript-config/
+├── scripts/                     # Setup và compatibility wrappers
+├── deploy/nginx/                # Cấu hình nginx tham khảo
+├── storage/                     # Runtime files, tạo bởi setup
+├── first-run.sh                 # Bootstrap lần đầu
+├── start-application.sh         # Start cả web và API
+├── package.json
+└── turbo.json
 ```
 
-## Key Code Paths
+## Yêu cầu môi trường
 
-If you are new to the repository, these are the most useful places to start:
+- Node.js `>=16.14.0`
+- npm `>=8.0.0`
+- Python 3 với `venv`
 
-- `apps/web/app`: user pages, admin pages, and route handlers
-- `apps/web/lib/db.ts`: Prisma client configuration for SQLite
-- `apps/web/lib/runtimeConfig.ts`: shared path and runtime env resolution for the web app
-- `apps/web/middleware.ts`: rewrite layer from web routes to the internal API
-- `apps/web/prisma/schema.prisma`: source of truth for the database schema
-- `apps/web/prisma/seed.ts`: admin user and sample contest seed logic
-- `apps/api/backend/main.py`: FastAPI entrypoint and submission/leaderboard endpoints
-- `apps/api/backend/repositories.py`: SQLite access layer for the internal service
-- `apps/api/backend/worker.py`: queue processing and judge subprocess orchestration
-- `apps/api/backend/streams.py`: SSE subscriber/broadcast support
+Trên Debian/Ubuntu có `apt-get`, script setup có thể tự cài Node.js 16 và `python3-venv` nếu thiếu.
 
-## Data Model
+## Khởi chạy nhanh
 
-The current Prisma schema is intentionally small:
-
-- `User`: accounts, roles, and password hashes
-- `Contest`: contest metadata, deadlines, evaluation configuration, and status
-- `Submission`: uploaded file metadata, grading status, score, and serialized metrics
-
-Next.js uses Prisma for web-side data access. FastAPI uses `aiosqlite` against the same database file for async worker and stream-friendly access.
-
-## Getting Started
-
-### 1. First-time bootstrap
-
-```bash
-chmod +x first-run.sh start-application.sh
-./first-run.sh
-```
-
-`first-run.sh` forwards into the repository bootstrap flow. It prepares `.venv`, installs Python dependencies, ensures a compatible Node.js/npm runtime, installs Node dependencies, writes both `.env.local` files, generates the Prisma client, pushes the database schema, and seeds the admin user.
-
-### 2. Start the application
-
-```bash
-./start-application.sh
-```
-
-This script verifies dependencies, regenerates the Prisma client, builds the workspace, starts FastAPI on port `8010`, and starts Next.js on port `3000`.
-
-### 3. Open the app
-
-- web: `http://localhost:3000`
-- api docs: `http://127.0.0.1:8010/docs`
-
-## Development Workflow
-
-### First-time setup
+Lần đầu trên máy mới hoặc clone mới:
 
 ```bash
 ./first-run.sh
 ./start-application.sh
 ```
 
-This is the simplest supported flow for a fresh machine or a fresh clone.
+Sau khi start:
 
-### Subsequent runs
+- Web app: `http://localhost:3000`
+- FastAPI nội bộ: `http://127.0.0.1:8010`
 
-```bash
-./start-application.sh
+Tài khoản admin mặc định nếu để trống prompt password lúc setup:
+
+```text
+username: admin
+password: admin123
 ```
 
-This runs the production-like local start flow and starts both services:
+Nếu đã nhập password khác trong `./first-run.sh`, seed sẽ dùng password đó cho user `admin`.
 
-- web: `http://localhost:3000`
-- internal api: `http://127.0.0.1:8010`
-
-### Advanced npm commands
+## Lệnh phát triển
 
 ```bash
-npm run dev:web
-npm run dev:api
-npm run dev
+npm run setup             # Chạy scripts/setup.sh
+npm run dev               # Chạy dev tasks qua Turborepo
+npm run dev:web           # Chạy Next.js tại port 3000
+npm run dev:api           # Chạy FastAPI tại port 8010
+npm run build             # Build/compile tất cả workspace
+npm run lint              # ESLint cho workspace có lint
+npm run check-types       # TypeScript/compile checks
+npm run prisma:generate   # Generate Prisma client
+npm run db:push           # Push Prisma schema vào SQLite
+npm run seed              # Seed admin/sample data
+npm start                 # Wrapper cho start-application.sh
 ```
 
-Use these only when you want to debug an individual service or use the Turborepo development workflow directly.
-
-## Common Commands
+Một số lệnh workspace trực tiếp:
 
 ```bash
-npm run setup
-npm run dev
-npm run dev:web
-npm run dev:api
-npm run build
-npm run lint
-npm run check-types
-npm run prisma:generate
-npm run db:push
-npm run seed
-npm start
+npm --workspace @repo/web run db:reset
+npm --workspace @repo/web run start
+npm --workspace @repo/api run start
 ```
 
-## Environment and Configuration
+## Cấu hình môi trường
 
-The setup script writes matching runtime configuration into:
+`./first-run.sh` và `npm run setup` tạo hai file env đồng bộ:
 
 - `apps/web/.env.local`
 - `apps/api/.env.local`
 
-The most important variables are:
+Biến quan trọng:
 
-- `DATABASE_URL`: SQLite file used by both apps
-- `STORAGE_ROOT`: shared storage directory
-- `FASTAPI_INTERNAL_URL`: internal target used by Next.js submission proxy routes and leaderboard rewrites
-- `NEXT_PUBLIC_FASTAPI_PUBLIC_URL`: optional browser-facing FastAPI base URL/path for direct API access
-- `PYTHON_BIN`: Python interpreter used by the API and judge
-- `WORKER_POLL_MS`: worker wake-up interval
-- `WORKER_MAX_CONCURRENT`: max number of concurrent judge jobs
-- `JUDGE_TIMEOUT_SECONDS`: per-job timeout
-- `PENDING_UPLOAD_TIMEOUT_SECONDS`: max age for a reserved upload before it is failed and quota is refunded
+| Biến | Mục đích |
+| --- | --- |
+| `DATABASE_URL` | SQLite database dùng chung |
+| `STORAGE_ROOT` | Thư mục runtime dùng chung |
+| `FASTAPI_INTERNAL_URL` | Địa chỉ FastAPI nội bộ để Next.js proxy/rewrite |
+| `NEXT_PUBLIC_FASTAPI_PUBLIC_URL` | Base URL public tùy chọn cho browser |
+| `PYTHON_BIN` | Python interpreter trong `.venv` |
+| `WORKER_POLL_MS` | Chu kỳ worker poll queue |
+| `WORKER_MAX_CONCURRENT` | Số job judge tối đa chạy đồng thời |
+| `JUDGE_TIMEOUT_SECONDS` | Timeout mỗi lần chấm |
+| `PENDING_UPLOAD_TIMEOUT_SECONDS` | Thời gian tối đa cho reserved upload trước khi failed/refund |
+| `SEED_ADMIN_PASSWORD` | Password dùng khi seed admin |
 
-The setup script also writes compatibility aliases that still exist in the runtime config:
+`UPLOAD_DIR` và `MAX_CONCURRENT_JUDGES` vẫn được ghi để giữ tương thích với code cũ.
 
-- `UPLOAD_DIR`
-- `MAX_CONCURRENT_JUDGES`
+## Data model
 
-The setup and start scripts also validate the JavaScript runtime before running `npm install`. FastCons targets the Ubuntu 18.04-compatible Node.js/npm toolchain:
+Schema Prisma nằm tại `apps/web/prisma/schema.prisma`.
 
-- Node.js `>= 16`
-- npm `>= 8`
+- `User`: tài khoản admin/contestant.
+- `Contest`: bài contest, deadline, status, evaluate code, ground truth, daily submission limit.
+- `Submission`: file nộp, trạng thái upload/chấm điểm, score, metrics, quota usage state.
+- `SubmissionQuotaWindow`: cửa sổ quota 24 giờ theo user và contest.
 
-On Debian/Ubuntu-style systems with `apt-get`, the scripts will attempt to install a compatible Node.js runtime automatically.
+## File nên đọc khi tiếp tục phát triển
 
-## Script Entry Points
-
-These are the root-level entry points users should care about first:
-
-- `first-run.sh` -> bootstrap flow for setup and initialization
-- `start-application.sh` -> build-and-run flow for the full local stack
-
-These additional scripts still exist for compatibility or targeted debugging:
-
-- `scripts/run.sh` -> compatibility wrapper that redirects to web dev flow
-- `scripts/run-web.sh` -> wrapper for `npm run dev:web`
-- `scripts/run-api.sh` -> wrapper for `npm run dev:api`
-
-## Default Admin Account
-
-The seed script creates or updates the admin account:
-
-- username: `admin`
-- password: the value entered during `npm run setup`
-- default fallback password if left blank during setup: `admin123`
-
-## Notes
-
-- `npm` is the official package manager for this repository.
-- The submission and leaderboard APIs are intentionally routed through FastAPI even though they are exposed under the same web origin.
-- Both applications must agree on the same database path and storage root, which is why setup writes env files for both sides together.
-
-See [SETUP.md](./SETUP.md) for the detailed setup and operations guide.
+- `CONTEXT.md`: ngôn ngữ domain và các quy tắc nghiệp vụ quan trọng.
+- `SETUP.md`: giải thích chi tiết hơn về setup/start scripts.
+- `apps/web/prisma/schema.prisma`: source of truth của database.
+- `apps/api/backend/main.py`: FastAPI endpoints cho upload, submission và leaderboard.
+- `apps/api/backend/worker.py`: worker chấm điểm.
+- `apps/api/scripts/judge_runner.py`: logic chạy evaluate code.
