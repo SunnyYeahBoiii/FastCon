@@ -1185,6 +1185,15 @@ async def rerun_submission(
     return {"ok": True}
 
 
+@app.get("/api/submissions/dlq")
+async def list_dlq_submissions(
+    limit: int = Query(50, ge=1, le=200),
+    _admin_user: dict = Depends(get_admin_user),
+):
+    submissions = await repositories.fetch_dlq_submissions(limit)
+    return {"dlq": [schemas.admin_submission_payload(row) for row in submissions]}
+
+
 @app.get("/api/leaderboard")
 async def leaderboard(contest_id: str | None = Query(None, alias="contestId")):
     rows = await repositories.fetch_leaderboard_rows(contest_id)

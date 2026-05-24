@@ -186,6 +186,23 @@ async def _ensure_submission_upload_progress_columns(
         )
 
 
+async def _ensure_submission_retry_columns(
+    connection: aiosqlite.Connection,
+) -> None:
+    cursor = await connection.execute('PRAGMA table_info("Submission")')
+    columns = {row["name"] for row in await cursor.fetchall()}
+
+    if "retryCount" not in columns:
+        await connection.execute(
+            'ALTER TABLE "Submission" ADD COLUMN "retryCount" INTEGER NOT NULL DEFAULT 0'
+        )
+
+    if "lastError" not in columns:
+        await connection.execute(
+            'ALTER TABLE "Submission" ADD COLUMN "lastError" TEXT'
+        )
+
+
 async def _count_active_quota_usage(
     connection: aiosqlite.Connection,
     *,
@@ -212,6 +229,84 @@ async def _count_active_quota_usage(
     return int(row["used"] if row else 0)
 
 
+_POOL_SIZE = 10
+_pool: SQLiteConnectionPool | None = None
+_pool_lock = asyncio.Lock()
+
+
+class SQLiteConnectionPool:
+    """Simple connection pool for SQLite using asyncio.Queue."""
+
+    def __init__(self, db_path: Path, pool_size: int = _POOL_SIZE) -> None:
+        self._db_path = db_path
+        self._pool: asyncio.Queue[aiosqlite.Connection] = asyncio.Queue(maxsize=pool_size)
+        self._pool_size = pool_size
+
+    async def _create_connection(self) -> aiosqlite.Connection:
+        conn = await aiosqlite.connect(self._db_path, timeout=30)
+        conn.row_factory = aiosqlite.Row
+        return conn
+
+    async def acquire(self) -> aiosqlite.Connection:
+        try:
+            return self._pool.get_nowait()
+        except asyncio.QueueEmpty:
+            return await self._create_connection()
+
+    async def release(self, conn: aiosqlite.Connection) -> None:
+        try:
+            self._pool.put_nowait(conn)
+        except asyncio.QueueFull:
+            await conn.close()
+
+    async def close_all(self) -> None:
+        while True:
+            try:
+                conn = self._pool.get_nowait()
+                await conn.close()
+            except asyncio.QueueEmpty:
+                break
+
+    @asynccontextmanager
+    async def connection(self) -> AsyncIterator[aiosqlite.Connection]:
+        conn = await self.acquire()
+        try:
+            yield conn
+        finally:
+            await self.release(conn)
+
+
+async def get_pool() -> SQLiteConnectionPool:
+    global _pool
+    if _pool is not None:
+        return _pool
+    async with _pool_lock:
+        if _pool is not None:
+            return _pool
+        _pool = SQLiteConnectionPool(get_sqlite_path())
+        return _pool
+
+
+async def close_pool() -> None:
+    global _pool
+    if _pool is not None:
+        await _pool.close_all()
+        _pool = None
+
+
+async def initialize_database() -> bool:
+    """Enable WAL mode and configure SQLite pragmas for better concurrency."""
+    db_path = get_sqlite_path()
+    async with aiosqlite.connect(db_path, timeout=30) as conn:
+        await conn.execute("PRAGMA journal_mode=WAL")
+        await conn.execute("PRAGMA busy_timeout=5000")
+        await conn.execute("PRAGMA synchronous=NORMAL")
+        cursor = await conn.execute("PRAGMA journal_mode")
+        row = await cursor.fetchone()
+        await conn.commit()
+        return row is not None and row[0].lower() == "wal"
+
+
 @asynccontextmanager
 async def open_connection() -> AsyncIterator[aiosqlite.Connection]:
     connection = await aiosqlite.connect(get_sqlite_path(), timeout=30)
@@ -225,6 +320,7 @@ async def open_connection() -> AsyncIterator[aiosqlite.Connection]:
 async def ensure_submission_quota_schema(connection: aiosqlite.Connection) -> None:
     await _ensure_submission_quota_usage_state_column(connection)
     await _ensure_submission_upload_progress_columns(connection)
+    await _ensure_submission_retry_columns(connection)
     await connection.execute(
         '''
         CREATE TABLE IF NOT EXISTS "SubmissionQuotaWindow" (
@@ -258,7 +354,7 @@ async def ensure_submission_quota_schema(connection: aiosqlite.Connection) -> No
 
 
 async def ensure_runtime_schema() -> None:
-    global _runtime_schema_path
+    global _runtime_schema_path, _pool
 
     sqlite_path = get_sqlite_path()
     if _runtime_schema_path == sqlite_path:
@@ -268,8 +364,16 @@ async def ensure_runtime_schema() -> None:
         if _runtime_schema_path == sqlite_path:
             return
 
-        async with open_connection() as connection:
+        # 1. Enable WAL mode
+        await initialize_database()
+
+        # 2. Initialize pool
+        _pool = SQLiteConnectionPool(sqlite_path)
+
+        # 3. Run schema migrations with pool connection
+        async with _pool.connection() as connection:
             await ensure_submission_quota_schema(connection)
+
         _runtime_schema_path = sqlite_path
 
 
@@ -755,7 +859,8 @@ async def fail_stale_submission_uploads(
 
 
 async def reset_running_submissions() -> None:
-    async with open_connection() as connection:
+    pool = await get_pool()
+    async with pool.connection() as connection:
         await connection.execute(
             'UPDATE "Submission" SET "status" = \'queued\' WHERE "status" = \'running\''
         )
@@ -774,8 +879,8 @@ async def reset_running_submissions() -> None:
 
 
 async def claim_next_queued_submission() -> dict[str, Any] | None:
-    async with open_connection() as connection:
-        await connection.execute("BEGIN IMMEDIATE")
+    pool = await get_pool()
+    async with pool.connection() as connection:
         cursor = await connection.execute(
             '''
             SELECT "id", "userId"
@@ -787,7 +892,6 @@ async def claim_next_queued_submission() -> dict[str, Any] | None:
         )
         row = await cursor.fetchone()
         if row is None:
-            await connection.commit()
             return None
 
         update_cursor = await connection.execute(
@@ -798,16 +902,17 @@ async def claim_next_queued_submission() -> dict[str, Any] | None:
             ''',
             (row["id"],),
         )
+        await connection.commit()
+
         if update_cursor.rowcount != 1:
-            await connection.rollback()
             return None
 
-        await connection.commit()
         return {"id": row["id"], "userId": row["userId"]}
 
 
 async def fetch_submission_status(submission_id: str) -> dict[str, Any] | None:
-    async with open_connection() as connection:
+    pool = await get_pool()
+    async with pool.connection() as connection:
         cursor = await connection.execute(
             'SELECT "id", "userId", "status", "score", "metrics" FROM "Submission" WHERE "id" = ?',
             (submission_id,),
@@ -816,17 +921,99 @@ async def fetch_submission_status(submission_id: str) -> dict[str, Any] | None:
 
 
 async def requeue_submission(submission_id: str) -> bool:
-    async with open_connection() as connection:
+    pool = await get_pool()
+    async with pool.connection() as connection:
         cursor = await connection.execute(
             '''
             UPDATE "Submission"
-            SET "status" = 'queued', "score" = NULL, "metrics" = NULL
+            SET "status" = 'queued', "score" = NULL, "metrics" = NULL, "retryCount" = 0
             WHERE "id" = ?
             ''',
             (submission_id,),
         )
         await connection.commit()
         return cursor.rowcount == 1
+
+
+async def increment_submission_retry(
+    submission_id: str,
+    error: str,
+    max_retries: int = 3,
+) -> dict:
+    """Increment retry count. Returns action: 'retry', 'dlq', or 'not_found'."""
+    pool = await get_pool()
+    async with pool.connection() as connection:
+        cursor = await connection.execute(
+            'SELECT "id", "retryCount" FROM "Submission" WHERE "id" = ?',
+            (submission_id,),
+        )
+        row = await cursor.fetchone()
+        if row is None:
+            return {"action": "not_found"}
+
+        current_retries = int(row["retryCount"] or 0)
+        new_retries = current_retries + 1
+
+        if new_retries >= max_retries:
+            # Move to DLQ
+            await connection.execute(
+                '''
+                UPDATE "Submission"
+                SET "status" = 'failed', "lastError" = ?, "retryCount" = ?,
+                    "metrics" = ?
+                WHERE "id" = ?
+                ''',
+                (error, new_retries, json.dumps({"error": error, "retries": new_retries}), submission_id),
+            )
+            await connection.commit()
+            return {"action": "dlq", "retries": new_retries}
+        else:
+            # Re-queue with incremented retry count
+            await connection.execute(
+                '''
+                UPDATE "Submission"
+                SET "status" = 'queued', "score" = NULL, "metrics" = NULL,
+                    "lastError" = ?, "retryCount" = ?,
+                    "quotaUsageState" = 'pending'
+                WHERE "id" = ?
+                ''',
+                (error, new_retries, submission_id),
+            )
+            await connection.commit()
+            return {"action": "retry", "retries": new_retries}
+
+
+async def fetch_dlq_submissions(limit: int = 50) -> list[dict[str, Any]]:
+    """Fetch submissions that have been moved to DLQ (retryCount >= 3)."""
+    pool = await get_pool()
+    async with pool.connection() as connection:
+        cursor = await connection.execute(
+            '''
+            SELECT
+              s."id",
+              s."userId",
+              s."contestId",
+              s."filename",
+              s."status",
+              s."score",
+              s."metrics",
+              s."retryCount",
+              s."lastError",
+              s."createdAt",
+              u."name" AS user_name,
+              u."username" AS user_username,
+              c."title" AS contest_title
+            FROM "Submission" s
+            JOIN "User" u ON u."id" = s."userId"
+            JOIN "Contest" c ON c."id" = s."contestId"
+            WHERE s."status" = 'failed' AND s."retryCount" >= 3
+            ORDER BY s."createdAt" DESC
+            LIMIT ?
+            ''',
+            (limit,),
+        )
+        rows = await cursor.fetchall()
+        return [dict(row) for row in rows]
 
 
 async def update_submission_result(
@@ -837,7 +1024,8 @@ async def update_submission_result(
     metrics: str | None,
 ) -> None:
     await ensure_runtime_schema()
-    async with open_connection() as connection:
+    pool = await get_pool()
+    async with pool.connection() as connection:
         await connection.execute(
             '''
             UPDATE "Submission"
