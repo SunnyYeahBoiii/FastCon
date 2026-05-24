@@ -95,3 +95,15 @@ def get_judge_timeout_seconds() -> int:
 
 def get_pending_upload_timeout_seconds() -> int:
     return _read_int("PENDING_UPLOAD_TIMEOUT_SECONDS", 900)
+
+
+def calculate_judge_timeout(file_size_bytes: int) -> int:
+    """Calculate timeout based on file size.
+    Formula: min(1800, max(120, 60 + (size_mb // 100) * 30))
+    - File < 100MB: 120s (keep current default)
+    - File 1GB: ~600s
+    - File 2GB: ~900s
+    - Max: 1800s (30 minutes)
+    """
+    size_mb = file_size_bytes // (1024 * 1024)
+    return min(1800, max(get_judge_timeout_seconds(), 60 + (size_mb // 100) * 30))
