@@ -28,6 +28,34 @@ interface SubmissionsTableProps {
 const API_BASE_URL =
   process.env.NEXT_PUBLIC_FASTAPI_PUBLIC_URL?.replace(/\/$/, "") || "/cs116.khtn";
 const PAGE_SIZE = 10;
+const MAX_VISIBLE_PAGES = 7;
+
+function generatePaginationItems(current: number, total: number): (number | "ellipsis")[] {
+  if (total <= MAX_VISIBLE_PAGES) {
+    return Array.from({ length: total }, (_, i) => i + 1);
+  }
+
+  const items: (number | "ellipsis")[] = [];
+  items.push(1);
+
+  if (current > 3) {
+    items.push("ellipsis");
+  }
+
+  const start = Math.max(2, current - 1);
+  const end = Math.min(total - 1, current + 1);
+
+  for (let i = start; i <= end; i++) {
+    items.push(i);
+  }
+
+  if (current < total - 2) {
+    items.push("ellipsis");
+  }
+
+  items.push(total);
+  return items;
+}
 
 function apiUrl(path: string) {
   return `${API_BASE_URL}${path}`;
@@ -143,6 +171,7 @@ const getErrorInfo = (metrics: string | null): { error: string | null; metrics: 
           </h2>
         </div>
 
+        <div className="overflow-x-auto">
         <table className="w-full text-left border-collapse">
           <thead>
             <tr className="bg-surface-container-low text-on-surface-variant font-semibold text-sm border-b border-outline-variant/15">
@@ -197,13 +226,14 @@ const getErrorInfo = (metrics: string | null): { error: string | null; metrics: 
             })}
           </tbody>
         </table>
+        </div>
 
         {/* Pagination */}
         <div className="bg-surface-container-lowest px-6 py-4 flex items-center justify-between border-t border-outline-variant/15">
           <span className="text-sm text-on-surface-variant">
             Hiển thị {(currentPage - 1) * PAGE_SIZE + 1}-{Math.min(currentPage * PAGE_SIZE, liveSubmissions.length)} của {liveSubmissions.length} bài nộp
           </span>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1">
             <button
               onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
               disabled={currentPage === 1}
@@ -211,19 +241,28 @@ const getErrorInfo = (metrics: string | null): { error: string | null; metrics: 
             >
               <span className="material-symbols-outlined">chevron_left</span>
             </button>
-            {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
-              <button
-                key={page}
-                onClick={() => setCurrentPage(page)}
-                className={`w-8 h-8 flex items-center justify-center rounded font-medium ${
-                  page === currentPage
-                    ? "bg-primary text-on-primary"
-                    : "hover:bg-surface-container-high transition-colors text-on-surface-variant"
-                }`}
-              >
-                {page}
-              </button>
-            ))}
+            {generatePaginationItems(currentPage, totalPages).map((item, idx) =>
+              item === "ellipsis" ? (
+                <span
+                  key={`ellipsis-${idx}`}
+                  className="w-8 h-8 flex items-center justify-center text-on-surface-variant text-sm"
+                >
+                  ...
+                </span>
+              ) : (
+                <button
+                  key={item}
+                  onClick={() => setCurrentPage(item)}
+                  className={`w-8 h-8 flex items-center justify-center rounded font-medium ${
+                    item === currentPage
+                      ? "bg-primary text-on-primary"
+                      : "hover:bg-surface-container-high transition-colors text-on-surface-variant"
+                  }`}
+                >
+                  {item}
+                </button>
+              )
+            )}
             <button
               onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
               disabled={currentPage === totalPages}
@@ -259,13 +298,13 @@ function SubmissionDetailModal({ submission, onClose }: { submission: Submission
         </div>
 
         <div className="space-y-3 text-sm">
-          <div className="flex justify-between">
-            <span className="text-on-surface-variant">Người nộp</span>
-            <span className="text-on-surface font-medium">{submission.user.name}</span>
+          <div className="flex justify-between gap-4">
+            <span className="text-on-surface-variant shrink-0">Người nộp</span>
+            <span className="text-on-surface font-medium text-right">{submission.user.name}</span>
           </div>
-          <div className="flex justify-between">
-            <span className="text-on-surface-variant">File</span>
-            <span className="text-on-surface-variant">{submission.filename}</span>
+          <div className="flex justify-between gap-4">
+            <span className="text-on-surface-variant shrink-0">File</span>
+            <span className="text-on-surface-variant text-right break-all">{submission.filename}</span>
           </div>
           <div className="flex justify-between">
             <span className="text-on-surface-variant">Trạng thái</span>

@@ -38,7 +38,7 @@ export default async function ContestDetailPage({ params }: ContestDetailPagePro
   }
 
   return (
-    <div className="p-8">
+    <div className="p-4 sm:p-6 lg:p-8 max-w-full overflow-x-auto">
       {/* Header */}
       <header className="mb-8">
         <Link
@@ -48,14 +48,14 @@ export default async function ContestDetailPage({ params }: ContestDetailPagePro
           <ArrowLeft className="w-5 h-5" />
           <span className="text-sm font-medium">Quay lại danh sách</span>
         </Link>
-        <div className="flex items-center gap-4">
-          <div className="w-12 h-12 rounded-lg bg-surface-container-low flex items-center justify-center text-primary">
+        <div className="flex items-center gap-4 min-w-0">
+          <div className="w-12 h-12 rounded-lg bg-surface-container-low flex items-center justify-center text-primary shrink-0">
             <span className="material-symbols-outlined" style={{ fontVariationSettings: "'FILL' 1" }}>
               event_note
             </span>
           </div>
-          <div>
-            <h1 className="text-3xl font-bold tracking-tight text-on-surface">
+          <div className="min-w-0">
+            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-on-surface truncate">
               {contest.title}
             </h1>
           </div>
