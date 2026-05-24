@@ -3,6 +3,7 @@
 
 import sys
 import os
+import faulthandler
 import json
 import pickle
 import sqlite3
@@ -13,6 +14,8 @@ from urllib.parse import unquote, urlparse
 APP_ROOT = Path(__file__).resolve().parent.parent
 WORKSPACE_ROOT = APP_ROOT.parent.parent
 PRISMA_DIR = WORKSPACE_ROOT / "apps" / "web" / "prisma"
+
+faulthandler.enable(all_threads=True)
 
 
 def resolve_db_path() -> Path:
@@ -32,6 +35,16 @@ def resolve_db_path() -> Path:
 
 
 DB_PATH = resolve_db_path()
+
+
+def resolve_workspace_path(path_value: str | None) -> Path | None:
+    if not path_value:
+        return None
+
+    path = Path(path_value)
+    if path.is_absolute():
+        return path
+    return (WORKSPACE_ROOT / path).resolve()
 
 
 def get_db_connection():
@@ -154,15 +167,15 @@ def main():
         update_submission(submission_id, "failed")
         sys.exit(1)
 
-    ground_truth_path = contest_info["groundTruthPath"]
-    if not ground_truth_path or not os.path.exists(ground_truth_path):
+    ground_truth_path = resolve_workspace_path(contest_info["groundTruthPath"])
+    if ground_truth_path is None or not ground_truth_path.exists():
         msg = f"Ground truth not found for contest {submission['contestId']} (path: {ground_truth_path})"
         print(msg)
         update_submission(submission_id, "failed", None, {"error": msg})
         sys.exit(1)
 
-    submission_path = submission["filepath"]
-    if not os.path.exists(submission_path):
+    submission_path = resolve_workspace_path(submission["filepath"])
+    if submission_path is None or not submission_path.exists():
         print(f"Submission file not found: {submission_path}")
         update_submission(submission_id, "failed")
         sys.exit(1)
@@ -173,7 +186,7 @@ def main():
         if evaluate_code and evaluate_code.strip():
             print("Using custom evaluate function")
             score, metrics = run_custom_evaluate(
-                evaluate_code, submission_path, ground_truth_path
+                evaluate_code, str(submission_path), str(ground_truth_path)
             )
         else:
             print("Using default evaluation (simple comparison)")
