@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import json
 import shutil
 import time
@@ -283,6 +284,67 @@ def _parse_non_negative_int(value: str | None) -> int | None:
     return parsed if parsed >= 0 else None
 
 
+def _check_disk_space(required_bytes: int) -> tuple[bool, int]:
+    """Check if there's enough disk space. Returns (ok, free_bytes)."""
+    root = get_submissions_root()
+    try:
+        usage = shutil.disk_usage(str(root))
+        # Require 1.5x file size + 5GB buffer
+        needed = int(required_bytes * 1.5) + 5 * 1024**3
+        return usage.free >= needed, usage.free
+    except OSError:
+        return True, 0  # If we can't check, allow the upload
+
+
+def _compute_sha256(filepath: Path) -> str:
+    """Compute SHA-256 hash of a file."""
+    h = hashlib.sha256()
+    with filepath.open("rb") as f:
+        while True:
+            chunk = f.read(8 * 1024 * 1024)  # 8MB chunks
+            if not chunk:
+                break
+            h.update(chunk)
+    return h.hexdigest()
+
+
+async def _merge_flow_parts_parallel(filepath: Path, params: FlowChunkParams, broadcaster: SubmissionBroadcaster | None = None) -> None:
+    """Merge flow parts using parallel reads for I/O bound chunks."""
+    part_filepath = _part_path(filepath)
+    part_filepath.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        # Read all chunks in parallel (I/O bound)
+        async def _read_chunk(chunk_number: int) -> bytes:
+            part_path = _flow_part_path(filepath, chunk_number)
+            return await asyncio.to_thread(part_path.read_bytes)
+
+        chunks = await asyncio.gather(*[
+            _read_chunk(chunk_number)
+            for chunk_number in range(1, params.total_chunks + 1)
+        ])
+
+        # Write sequentially
+        with part_filepath.open("wb") as output:
+            total_chunks = len(chunks)
+            for i, chunk_data in enumerate(chunks):
+                output.write(chunk_data)
+                # Broadcast progress every 25%
+                if broadcaster and total_chunks > 4 and (i + 1) % max(1, total_chunks // 4) == 0:
+                    percent = int(((i + 1) / total_chunks) * 100)
+                    await broadcaster.publish(
+                        "",  # user_id empty for progress broadcast
+                        {"type": "merge_progress", "percent": percent},
+                    )
+
+        if part_filepath.stat().st_size != params.total_size:
+            raise ValueError("Merged upload size mismatch")
+        part_filepath.replace(filepath)
+        shutil.rmtree(_flow_parts_dir(filepath), ignore_errors=True)
+    except Exception:
+        part_filepath.unlink(missing_ok=True)
+        raise
+
+
 def _upload_progress_headers(offset: int, total: int | None) -> dict[str, str]:
     headers = {
         "Upload-Offset": str(offset),
@@ -422,6 +484,19 @@ async def init_submission_upload(request: Request, current_user: dict = Depends(
             {"ok": False, "error": "File must be a .pkl file"},
             status_code=status.HTTP_400_BAD_REQUEST,
         )
+
+    # Disk space check
+    if upload_total_bytes is not None:
+        ok, free_bytes = _check_disk_space(upload_total_bytes)
+        if not ok:
+            return JSONResponse(
+                {
+                    "ok": False,
+                    "code": "STORAGE_FULL",
+                    "error": f"Insufficient storage. Available: {free_bytes // (1024**3)}GB, needed: {upload_total_bytes // (1024**3)}GB",
+                },
+                status_code=status.HTTP_507_INSUFFICIENT_STORAGE,
+            )
 
     saved_filename, filepath = _submission_storage_path(filename)
     submission_result = await repositories.prepare_submission_upload_with_quota(
@@ -766,7 +841,7 @@ async def complete_submission_flow_upload(
         )
 
     try:
-        await asyncio.to_thread(_merge_flow_parts, filepath, params)
+        await _merge_flow_parts_parallel(filepath, params, broadcaster)
     except ValueError:
         return JSONResponse(
             {"ok": False, "error": "Merged upload size mismatch"},
@@ -778,6 +853,15 @@ async def complete_submission_flow_upload(
         user_id=current_user["id"],
         received_bytes=params.total_size,
     )
+
+    # Compute checksum for integrity
+    try:
+        file_checksum = await asyncio.to_thread(_compute_sha256, filepath)
+        print(f"[upload {submission_id}] SHA-256: {file_checksum}")
+    except Exception as e:
+        print(f"[upload {submission_id}] Checksum computation failed: {e}")
+        file_checksum = None
+
     completed = await repositories.complete_submission_upload(
         submission_id,
         user_id=current_user["id"],
