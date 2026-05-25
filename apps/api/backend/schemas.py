@@ -89,10 +89,28 @@ def quota_snapshot_payload(snapshot: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+_RECORD_POINT_BUCKETS: tuple[tuple[int, int], ...] = (
+    (1, 10),
+    (3, 9),
+    (6, 8),
+    (10, 7),
+    (15, 6),
+    (21, 5),
+    (28, 4),
+    (36, 3),
+    (45, 2),
+    (55, 1),
+)
+
+
 def get_points_from_rank(rank: int) -> int:
     if rank < 1:
         return 0
-    return max(11 - rank, 0)
+
+    for max_rank, points in _RECORD_POINT_BUCKETS:
+        if rank <= max_rank:
+            return points
+    return 0
 
 
 def build_leaderboard(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
