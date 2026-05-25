@@ -193,6 +193,53 @@ class ChunkUploadEndpointTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(Path(row[0]).read_bytes(), b"abcdef")
         self.assertFalse(Path(f"{row[0]}.part").exists())
 
+    async def test_init_upload_accepts_total_bytes_above_prisma_int_range(self) -> None:
+        large_upload_total_bytes = 2_687_511_703
+        original_check_disk_space = api_main._check_disk_space
+        api_main._check_disk_space = lambda required_bytes: (
+            True,
+            required_bytes * 2,
+        )
+        try:
+            init_response = await api_main.init_submission_upload(
+                FakeJsonRequest(
+                    {
+                        "contestId": "c1",
+                        "filename": "answer.pkl",
+                        "totalBytes": large_upload_total_bytes,
+                    }
+                ),
+                current_user={"id": "u1"},
+            )
+        finally:
+            api_main._check_disk_space = original_check_disk_space
+
+        self.assertIsInstance(init_response, dict)
+        self.assertEqual(init_response["uploadTotalBytes"], large_upload_total_bytes)
+        submission_id = init_response["submissionId"]
+
+        pending_upload = await repositories.fetch_pending_submission_upload(
+            submission_id,
+            user_id="u1",
+        )
+        assert pending_upload is not None
+        self.assertEqual(
+            pending_upload["uploadTotalBytes"],
+            large_upload_total_bytes,
+        )
+        self.assertEqual(pending_upload["uploadReceivedBytes"], 0)
+
+        offset_response = await api_main.get_submission_upload_offset(
+            submission_id,
+            current_user={"id": "u1"},
+        )
+        self.assertEqual(offset_response.status_code, 200)
+        self.assertEqual(offset_response.headers["Upload-Offset"], "0")
+        self.assertEqual(
+            offset_response.headers["Upload-Length"],
+            str(large_upload_total_bytes),
+        )
+
     async def test_flow_chunk_helpers_store_duplicate_chunk_idempotently(self) -> None:
         init_response = await api_main.init_submission_upload(
             FakeJsonRequest(

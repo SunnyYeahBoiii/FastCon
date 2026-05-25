@@ -381,12 +381,15 @@ class SubmissionQuotaRepositoryTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(next_result["reason"], "submission_limit_reached")
 
     async def test_prepare_upload_reserves_quota_until_upload_completes(self) -> None:
+        large_upload_total_bytes = 2_687_511_703
+        large_received_bytes = 2_147_483_648
+
         result = await repositories.prepare_submission_upload_with_quota(
             user_id="u1",
             contest_id="c1",
             filename="large.pkl",
             filepath="/tmp/large.pkl",
-            upload_total_bytes=12,
+            upload_total_bytes=large_upload_total_bytes,
         )
 
         self.assertTrue(result["ok"])
@@ -406,12 +409,12 @@ class SubmissionQuotaRepositoryTests(unittest.IsolatedAsyncioTestCase):
         finally:
             connection.close()
 
-        self.assertEqual(row, ("uploading", "pending", 12, 0))
+        self.assertEqual(row, ("uploading", "pending", large_upload_total_bytes, 0))
 
         progressed = await repositories.update_submission_upload_progress(
             result["submissionId"],
             user_id="u1",
-            received_bytes=7,
+            received_bytes=large_received_bytes,
         )
         self.assertTrue(progressed)
 
@@ -420,8 +423,11 @@ class SubmissionQuotaRepositoryTests(unittest.IsolatedAsyncioTestCase):
             user_id="u1",
         )
         assert pending_upload is not None
-        self.assertEqual(pending_upload["uploadTotalBytes"], 12)
-        self.assertEqual(pending_upload["uploadReceivedBytes"], 7)
+        self.assertEqual(pending_upload["uploadTotalBytes"], large_upload_total_bytes)
+        self.assertEqual(
+            pending_upload["uploadReceivedBytes"],
+            large_received_bytes,
+        )
 
         completed = await repositories.complete_submission_upload(
             result["submissionId"],

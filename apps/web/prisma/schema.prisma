@@ -41,8 +41,8 @@ model Submission {
   status    String   @default("uploaded")
   score     Float?
   metrics   String?
-  uploadTotalBytes    Int?
-  uploadReceivedBytes Int      @default(0)
+  uploadTotalBytes    BigInt?
+  uploadReceivedBytes BigInt   @default(0)
   quotaUsageState String   @default("pending")
   createdAt DateTime @default(now())
   user      User     @relation(fields: [userId], references: [id])

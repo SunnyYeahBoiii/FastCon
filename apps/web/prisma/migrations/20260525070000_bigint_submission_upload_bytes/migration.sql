@@ -1,0 +1,3 @@
+-- Prisma BigInt maps to SQLite INTEGER, so no storage rewrite is needed.
+-- This migration records the schema-level change from Prisma Int to BigInt
+-- for upload byte counters that can exceed the 32-bit Prisma Int range.
