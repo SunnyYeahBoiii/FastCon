@@ -80,7 +80,7 @@ def _build_quota_snapshot(
 ) -> dict[str, Any]:
     current_time = now or _utc_now()
     deadline = _coerce_datetime(contest_deadline)
-    is_deadline_passed = deadline is not None and current_time > deadline
+    is_deadline_passed = deadline is not None and current_time >= deadline
     limit = _normalize_submission_limit(daily_submission_limit)
     if limit is None:
         return {
@@ -144,6 +144,104 @@ def _build_quota_snapshot(
         "isLimited": True,
         "isQuotaExceeded": used >= limit,
     }
+
+
+async def _build_quota_snapshot_for_connection(
+    connection: aiosqlite.Connection,
+    *,
+    user_id: str,
+    contest: dict[str, Any],
+    now: datetime,
+) -> dict[str, Any]:
+    contest_id = contest["id"]
+    cursor = await connection.execute(
+        '''
+        SELECT
+          "windowStartedAt",
+          "submissionCount"
+        FROM "SubmissionQuotaWindow"
+        WHERE "userId" = ? AND "contestId" = ?
+        ''',
+        (user_id, contest_id),
+    )
+    quota_row = _row_to_dict(await cursor.fetchone())
+    quota_usage_count = await _count_active_quota_usage(
+        connection,
+        user_id=user_id,
+        contest_id=contest_id,
+        window_started_at=quota_row["windowStartedAt"] if quota_row else None,
+    )
+
+    return _build_quota_snapshot(
+        contest_id=contest_id,
+        daily_submission_limit=contest["dailySubmissionLimit"],
+        contest_deadline=contest["deadline"],
+        window_started_at=quota_row["windowStartedAt"] if quota_row else None,
+        submission_count=quota_usage_count,
+        now=now,
+    )
+
+
+def _contest_closed_reason(contest: dict[str, Any], now: datetime) -> str | None:
+    contest_status = str(contest.get("status") or "ongoing").strip().lower()
+    if contest_status != "ongoing":
+        return "contest_closed"
+
+    deadline = _coerce_datetime(contest["deadline"])
+    if deadline is not None and now >= deadline:
+        return "deadline_passed"
+
+    return None
+
+
+def _contest_from_pending_upload(row: dict[str, Any]) -> dict[str, Any] | None:
+    contest_id = row.get("contest_id")
+    if contest_id is None:
+        return None
+
+    return {
+        "id": contest_id,
+        "status": row["contestStatus"],
+        "deadline": row["contestDeadline"],
+        "dailySubmissionLimit": row["contestDailySubmissionLimit"],
+    }
+
+
+async def _fail_upload_for_closed_contest(
+    connection: aiosqlite.Connection,
+    *,
+    submission_id: str,
+    user_id: str,
+    contest: dict[str, Any],
+    reason: str,
+    now: datetime,
+) -> dict[str, Any]:
+    messages = {
+        "contest_closed": "Contest is no longer accepting submissions",
+        "deadline_passed": "Contest submission deadline has passed",
+    }
+    await connection.execute(
+        '''
+        UPDATE "Submission"
+        SET
+          "status" = 'failed',
+          "metrics" = ?,
+          "quotaUsageState" = 'refunded'
+        WHERE "id" = ? AND "userId" = ? AND "status" = 'uploading'
+        ''',
+        (
+            json.dumps({"error": messages.get(reason, "Upload rejected")}),
+            submission_id,
+            user_id,
+        ),
+    )
+    quota_snapshot = await _build_quota_snapshot_for_connection(
+        connection,
+        user_id=user_id,
+        contest=contest,
+        now=now,
+    )
+    return {"ok": False, "reason": reason, "quota": quota_snapshot}
 
 
 async def _ensure_submission_quota_usage_state_column(
@@ -489,31 +587,12 @@ async def fetch_submission_quota(user_id: str, contest_id: str) -> dict[str, Any
 
     await ensure_runtime_schema()
     async with open_connection() as connection:
-        cursor = await connection.execute(
-            '''
-            SELECT
-              "windowStartedAt",
-              "submissionCount"
-            FROM "SubmissionQuotaWindow"
-            WHERE "userId" = ? AND "contestId" = ?
-            ''',
-            (user_id, contest_id),
-        )
-        quota_row = _row_to_dict(await cursor.fetchone())
-        quota_usage_count = await _count_active_quota_usage(
+        return await _build_quota_snapshot_for_connection(
             connection,
             user_id=user_id,
-            contest_id=contest_id,
-            window_started_at=quota_row["windowStartedAt"] if quota_row else None,
+            contest=contest,
+            now=_utc_now(),
         )
-
-    return _build_quota_snapshot(
-        contest_id=contest_id,
-        daily_submission_limit=contest["dailySubmissionLimit"],
-        contest_deadline=contest["deadline"],
-        window_started_at=quota_row["windowStartedAt"] if quota_row else None,
-        submission_count=quota_usage_count,
-    )
 
 
 async def create_submission_with_quota(
@@ -543,7 +622,7 @@ async def create_submission_with_quota(
             return {"ok": False, "reason": "contest_not_found"}
 
         contest_status = str(contest.get("status") or "ongoing").strip().lower()
-        if contest_status == "completed":
+        if contest_status != "ongoing":
             quota_snapshot = _build_quota_snapshot(
                 contest_id=contest_id,
                 daily_submission_limit=contest["dailySubmissionLimit"],
@@ -560,7 +639,7 @@ async def create_submission_with_quota(
             }
 
         deadline = _coerce_datetime(contest["deadline"])
-        if deadline is not None and now > deadline:
+        if deadline is not None and now >= deadline:
             quota_snapshot = _build_quota_snapshot(
                 contest_id=contest_id,
                 daily_submission_limit=contest["dailySubmissionLimit"],
@@ -738,16 +817,21 @@ async def fetch_pending_submission_upload(
         cursor = await connection.execute(
             '''
             SELECT
-              "id",
-              "userId",
-              "contestId",
-              "filename",
-              "filepath",
-              "status",
-              "uploadTotalBytes",
-              "uploadReceivedBytes"
-            FROM "Submission"
-            WHERE "id" = ? AND "userId" = ? AND "status" = 'uploading'
+              s."id",
+              s."userId",
+              s."contestId",
+              s."filename",
+              s."filepath",
+              s."status",
+              s."uploadTotalBytes",
+              s."uploadReceivedBytes",
+              c."id" AS contest_id,
+              c."status" AS contestStatus,
+              c."deadline" AS contestDeadline,
+              c."dailySubmissionLimit" AS contestDailySubmissionLimit
+            FROM "Submission" s
+            LEFT JOIN "Contest" c ON c."id" = s."contestId"
+            WHERE s."id" = ? AND s."userId" = ? AND s."status" = 'uploading'
             ''',
             (submission_id, user_id),
         )
@@ -773,8 +857,132 @@ async def update_submission_upload_progress(
         return cursor.rowcount == 1
 
 
-async def complete_submission_upload(submission_id: str, *, user_id: str) -> bool:
+async def fail_pending_submission_upload_if_closed(
+    submission_id: str,
+    *,
+    user_id: str,
+) -> dict[str, Any] | None:
+    now = _utc_now()
     async with open_connection() as connection:
+        await connection.execute("BEGIN IMMEDIATE")
+        cursor = await connection.execute(
+            '''
+            SELECT
+              s."id",
+              s."userId",
+              s."contestId",
+              s."status",
+              c."id" AS contest_id,
+              c."status" AS contestStatus,
+              c."deadline" AS contestDeadline,
+              c."dailySubmissionLimit" AS contestDailySubmissionLimit
+            FROM "Submission" s
+            LEFT JOIN "Contest" c ON c."id" = s."contestId"
+            WHERE s."id" = ? AND s."userId" = ? AND s."status" = 'uploading'
+            ''',
+            (submission_id, user_id),
+        )
+        pending_upload = _row_to_dict(await cursor.fetchone())
+        if pending_upload is None:
+            await connection.rollback()
+            return None
+
+        contest = _contest_from_pending_upload(pending_upload)
+        if contest is None:
+            await connection.execute(
+                '''
+                UPDATE "Submission"
+                SET
+                  "status" = 'failed',
+                  "metrics" = ?,
+                  "quotaUsageState" = 'refunded'
+                WHERE "id" = ? AND "userId" = ? AND "status" = 'uploading'
+                ''',
+                (
+                    json.dumps({"error": "Contest not found"}),
+                    submission_id,
+                    user_id,
+                ),
+            )
+            await connection.commit()
+            return {"ok": False, "reason": "contest_not_found"}
+
+        reason = _contest_closed_reason(contest, now)
+        if reason is None:
+            await connection.rollback()
+            return None
+
+        result = await _fail_upload_for_closed_contest(
+            connection,
+            submission_id=submission_id,
+            user_id=user_id,
+            contest=contest,
+            reason=reason,
+            now=now,
+        )
+        await connection.commit()
+        return result
+
+
+async def complete_submission_upload(submission_id: str, *, user_id: str) -> dict[str, Any]:
+    now = _utc_now()
+    async with open_connection() as connection:
+        await connection.execute("BEGIN IMMEDIATE")
+        cursor = await connection.execute(
+            '''
+            SELECT
+              s."id",
+              s."userId",
+              s."contestId",
+              s."status",
+              c."id" AS contest_id,
+              c."status" AS contestStatus,
+              c."deadline" AS contestDeadline,
+              c."dailySubmissionLimit" AS contestDailySubmissionLimit
+            FROM "Submission" s
+            LEFT JOIN "Contest" c ON c."id" = s."contestId"
+            WHERE s."id" = ? AND s."userId" = ? AND s."status" = 'uploading'
+            ''',
+            (submission_id, user_id),
+        )
+        pending_upload = _row_to_dict(await cursor.fetchone())
+        if pending_upload is None:
+            await connection.rollback()
+            return {"ok": False, "reason": "pending_upload_not_found"}
+
+        contest = _contest_from_pending_upload(pending_upload)
+        if contest is None:
+            await connection.execute(
+                '''
+                UPDATE "Submission"
+                SET
+                  "status" = 'failed',
+                  "metrics" = ?,
+                  "quotaUsageState" = 'refunded'
+                WHERE "id" = ? AND "userId" = ? AND "status" = 'uploading'
+                ''',
+                (
+                    json.dumps({"error": "Contest not found"}),
+                    submission_id,
+                    user_id,
+                ),
+            )
+            await connection.commit()
+            return {"ok": False, "reason": "contest_not_found"}
+
+        reason = _contest_closed_reason(contest, now)
+        if reason is not None:
+            result = await _fail_upload_for_closed_contest(
+                connection,
+                submission_id=submission_id,
+                user_id=user_id,
+                contest=contest,
+                reason=reason,
+                now=now,
+            )
+            await connection.commit()
+            return result
+
         cursor = await connection.execute(
             '''
             UPDATE "Submission"
@@ -783,8 +991,18 @@ async def complete_submission_upload(submission_id: str, *, user_id: str) -> boo
             ''',
             (submission_id, user_id),
         )
+        if cursor.rowcount != 1:
+            await connection.rollback()
+            return {"ok": False, "reason": "pending_upload_not_found"}
+
+        quota_snapshot = await _build_quota_snapshot_for_connection(
+            connection,
+            user_id=user_id,
+            contest=contest,
+            now=now,
+        )
         await connection.commit()
-        return cursor.rowcount == 1
+        return {"ok": True, "submissionId": submission_id, "quota": quota_snapshot}
 
 
 async def fail_submission_upload(

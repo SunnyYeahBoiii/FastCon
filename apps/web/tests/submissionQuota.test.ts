@@ -66,3 +66,16 @@ test("expired quota snapshot resets used count", () => {
   assert.equal(snapshot.windowStartedAt, null);
   assert.equal(snapshot.resetAt, null);
 });
+
+test("quota snapshot marks deadline passed at the exact deadline", () => {
+  const deadline = new Date("2026-05-18T01:00:00.000Z");
+  const snapshot = buildSubmissionQuotaSnapshot({
+    contestId: "c1",
+    dailySubmissionLimit: 3,
+    deadline,
+    used: 0,
+    serverNow: deadline,
+  });
+
+  assert.equal(snapshot.isDeadlinePassed, true);
+});

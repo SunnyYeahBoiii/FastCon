@@ -1013,6 +1013,7 @@ function handleSubmissionError(
 ) {
   if (data?.code === "CONTEST_DEADLINE_PASSED") {
     setSubmitError("Đã quá hạn nộp bài cho contest này.");
+    void fetchContests();
   } else if (data?.code === "CONTEST_CLOSED") {
     setSubmitError("Cuộc thi này đã đóng, không nhận bài nộp.");
     void fetchContests();

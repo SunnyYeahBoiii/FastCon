@@ -4,6 +4,7 @@ import sqlite3
 import tempfile
 import unittest
 import json
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from backend import repositories
@@ -11,8 +12,11 @@ from backend import main as api_main
 
 
 class DummyWorker:
+    def __init__(self) -> None:
+        self.notifications = 0
+
     def notify(self) -> None:
-        pass
+        self.notifications += 1
 
 
 class FakeApp:
@@ -385,6 +389,88 @@ class ChunkUploadEndpointTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(row[2], 6)
         self.assertEqual(Path(row[0]).read_bytes(), b"abcdef")
         self.assertFalse(Path(f"{row[0]}.parts").exists())
+
+    async def test_flow_complete_after_deadline_rejects_and_refunds_quota(self) -> None:
+        init_response = await api_main.init_submission_upload(
+            FakeJsonRequest(
+                {
+                    "contestId": "c1",
+                    "filename": "answer.pkl",
+                    "totalBytes": 6,
+                }
+            ),
+            current_user={"id": "u1"},
+        )
+        self.assertIsInstance(init_response, dict)
+        submission_id = init_response["submissionId"]
+
+        await api_main.upload_submission_flow_chunk(
+            FakeStreamRequest([b"abc"], {}),
+            submission_id,
+            flow_chunk_number=1,
+            flow_total_chunks=2,
+            flow_chunk_size=3,
+            flow_total_size=6,
+            flow_identifier="stable-id",
+            flow_filename="answer.pkl",
+            current_user={"id": "u1"},
+        )
+        await api_main.upload_submission_flow_chunk(
+            FakeStreamRequest([b"def"], {}),
+            submission_id,
+            flow_chunk_number=2,
+            flow_total_chunks=2,
+            flow_chunk_size=3,
+            flow_total_size=6,
+            flow_identifier="stable-id",
+            flow_filename="answer.pkl",
+            current_user={"id": "u1"},
+        )
+
+        connection = sqlite3.connect(self.db_path)
+        try:
+            connection.execute(
+                'UPDATE "Contest" SET "deadline" = ? WHERE "id" = ?',
+                (
+                    (datetime.now(timezone.utc) - timedelta(minutes=1)).isoformat(),
+                    "c1",
+                ),
+            )
+            connection.commit()
+        finally:
+            connection.close()
+
+        request = FakeCompleteRequest(
+            {
+                "flowTotalChunks": 2,
+                "flowChunkSize": 3,
+                "flowTotalSize": 6,
+                "flowIdentifier": "stable-id",
+                "flowFilename": "answer.pkl",
+            }
+        )
+        complete = await api_main.complete_submission_flow_upload(
+            request,
+            submission_id,
+            current_user={"id": "u1"},
+        )
+
+        self.assertEqual(complete.status_code, 400)
+        body = json.loads(complete.body)
+        self.assertEqual(body["code"], "CONTEST_DEADLINE_PASSED")
+        self.assertTrue(body["quota"]["isDeadlinePassed"])
+        self.assertEqual(request.app.state.worker.notifications, 0)
+
+        connection = sqlite3.connect(self.db_path)
+        try:
+            row = connection.execute(
+                'SELECT "status", "quotaUsageState" FROM "Submission" WHERE "id" = ?',
+                (submission_id,),
+            ).fetchone()
+        finally:
+            connection.close()
+
+        self.assertEqual(row, ("failed", "refunded"))
 
     async def test_flow_complete_rejects_missing_part(self) -> None:
         init_response = await api_main.init_submission_upload(

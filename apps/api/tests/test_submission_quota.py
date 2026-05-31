@@ -78,6 +78,20 @@ class SubmissionQuotaSnapshotTests(unittest.TestCase):
         self.assertEqual(snapshot["resetAt"], started_at + timedelta(hours=24))
         self.assertFalse(snapshot["isQuotaExceeded"])
 
+    def test_deadline_is_passed_at_exact_deadline(self) -> None:
+        deadline = datetime(2026, 3, 11, 13, 0, tzinfo=timezone.utc)
+
+        snapshot = _build_quota_snapshot(
+            contest_id="contest-1",
+            daily_submission_limit=5,
+            contest_deadline=deadline,
+            window_started_at=None,
+            submission_count=0,
+            now=deadline,
+        )
+
+        self.assertTrue(snapshot["isDeadlinePassed"])
+
     def test_window_resets_exactly_at_twenty_four_hours(self) -> None:
         started_at = datetime(2026, 3, 11, 13, 0, tzinfo=timezone.utc)
         now = started_at + timedelta(hours=24)
@@ -434,7 +448,7 @@ class SubmissionQuotaRepositoryTests(unittest.IsolatedAsyncioTestCase):
             user_id="u1",
         )
 
-        self.assertTrue(completed)
+        self.assertTrue(completed["ok"])
 
         connection = sqlite3.connect(self.db_path)
         try:
@@ -446,6 +460,48 @@ class SubmissionQuotaRepositoryTests(unittest.IsolatedAsyncioTestCase):
             connection.close()
 
         self.assertEqual(row, ("queued", "pending"))
+
+    async def test_upload_completion_after_deadline_fails_and_refunds_quota(self) -> None:
+        result = await repositories.prepare_submission_upload_with_quota(
+            user_id="u1",
+            contest_id="c1",
+            filename="late.pkl",
+            filepath="/tmp/late.pkl",
+        )
+        self.assertTrue(result["ok"])
+
+        connection = sqlite3.connect(self.db_path)
+        try:
+            connection.execute(
+                'UPDATE "Contest" SET "deadline" = ? WHERE "id" = ?',
+                (
+                    (datetime.now(timezone.utc) - timedelta(minutes=1)).isoformat(),
+                    "c1",
+                ),
+            )
+            connection.commit()
+        finally:
+            connection.close()
+
+        completed = await repositories.complete_submission_upload(
+            result["submissionId"],
+            user_id="u1",
+        )
+
+        self.assertFalse(completed["ok"])
+        self.assertEqual(completed["reason"], "deadline_passed")
+        self.assertTrue(completed["quota"]["isDeadlinePassed"])
+
+        connection = sqlite3.connect(self.db_path)
+        try:
+            row = connection.execute(
+                'SELECT "status", "quotaUsageState" FROM "Submission" WHERE "id" = ?',
+                (result["submissionId"],),
+            ).fetchone()
+        finally:
+            connection.close()
+
+        self.assertEqual(row, ("failed", "refunded"))
 
     async def test_failed_upload_refunds_reserved_quota(self) -> None:
         result = await repositories.prepare_submission_upload_with_quota(

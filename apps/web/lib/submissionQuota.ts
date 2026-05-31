@@ -63,7 +63,7 @@ export function buildSubmissionQuotaSnapshot({
 }): SubmissionQuotaSnapshot {
   const limit = normalizeLimit(dailySubmissionLimit);
   const deadlineDate = deadline ? new Date(deadline) : null;
-  const isDeadlinePassed = Boolean(deadlineDate && serverNow > deadlineDate);
+  const isDeadlinePassed = Boolean(deadlineDate && serverNow >= deadlineDate);
 
   if (limit === null) {
     return {

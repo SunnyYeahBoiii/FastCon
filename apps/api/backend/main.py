@@ -401,6 +401,22 @@ def _submission_failure_response(submission_result: dict) -> JSONResponse:
     )
 
 
+def _submission_completion_failure_response(submission_result: dict) -> JSONResponse:
+    if submission_result["reason"] == "pending_upload_not_found":
+        return JSONResponse(
+            {"ok": False, "error": "Pending upload not found"},
+            status_code=status.HTTP_404_NOT_FOUND,
+        )
+
+    return _submission_failure_response(submission_result)
+
+
+async def _cleanup_upload_files(filepath: Path) -> None:
+    await asyncio.to_thread(filepath.unlink, missing_ok=True)
+    await asyncio.to_thread(_part_path(filepath).unlink, missing_ok=True)
+    await asyncio.to_thread(shutil.rmtree, _flow_parts_dir(filepath), True)
+
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -531,6 +547,14 @@ async def get_submission_upload_offset(
     if pending_upload is None:
         return Response(status_code=status.HTTP_404_NOT_FOUND)
 
+    closed_result = await repositories.fail_pending_submission_upload_if_closed(
+        submission_id,
+        user_id=user_id,
+    )
+    if closed_result is not None:
+        await _cleanup_upload_files(Path(pending_upload["filepath"]))
+        return Response(status_code=status.HTTP_400_BAD_REQUEST)
+
     offset = int(pending_upload["uploadReceivedBytes"] or 0)
     total = pending_upload["uploadTotalBytes"]
     return Response(headers=_upload_progress_headers(offset, total))
@@ -553,6 +577,14 @@ async def test_submission_flow_chunk(
     )
     if pending_upload is None:
         return Response(status_code=status.HTTP_404_NOT_FOUND)
+
+    closed_result = await repositories.fail_pending_submission_upload_if_closed(
+        submission_id,
+        user_id=current_user["id"],
+    )
+    if closed_result is not None:
+        await _cleanup_upload_files(Path(pending_upload["filepath"]))
+        return Response(status_code=status.HTTP_400_BAD_REQUEST)
 
     total_bytes = pending_upload["uploadTotalBytes"]
     if not isinstance(total_bytes, int) or total_bytes <= 0:
@@ -593,6 +625,14 @@ async def upload_submission_file_chunk(
             {"ok": False, "error": "Pending upload not found"},
             status_code=status.HTTP_404_NOT_FOUND,
         )
+
+    closed_result = await repositories.fail_pending_submission_upload_if_closed(
+        submission_id,
+        user_id=user_id,
+    )
+    if closed_result is not None:
+        await _cleanup_upload_files(Path(pending_upload["filepath"]))
+        return _submission_failure_response(closed_result)
 
     total_bytes = pending_upload["uploadTotalBytes"]
     if not isinstance(total_bytes, int) or total_bytes <= 0:
@@ -683,15 +723,11 @@ async def upload_submission_file_chunk(
 
     await _finalize_part_file(filepath)
     completed = await repositories.complete_submission_upload(submission_id, user_id=user_id)
-    if not completed:
+    if not completed["ok"]:
         await asyncio.to_thread(filepath.unlink, missing_ok=True)
-        return JSONResponse(
-            {"ok": False, "error": "Pending upload not found"},
-            status_code=status.HTTP_404_NOT_FOUND,
-        )
+        return _submission_completion_failure_response(completed)
 
     request.app.state.worker.notify()
-    quota = await repositories.fetch_submission_quota(user_id, pending_upload["contestId"])
     return JSONResponse(
         {
             "ok": True,
@@ -700,7 +736,7 @@ async def upload_submission_file_chunk(
             "bytesWritten": bytes_written,
             "uploadOffset": next_offset,
             "uploadTotalBytes": total_bytes,
-            "quota": schemas.quota_snapshot_payload(quota) if quota is not None else None,
+            "quota": schemas.quota_snapshot_payload(completed["quota"]),
         },
         headers=_upload_progress_headers(next_offset, total_bytes),
     )
@@ -727,6 +763,14 @@ async def upload_submission_flow_chunk(
             {"ok": False, "error": "Pending upload not found"},
             status_code=status.HTTP_404_NOT_FOUND,
         )
+
+    closed_result = await repositories.fail_pending_submission_upload_if_closed(
+        submission_id,
+        user_id=current_user["id"],
+    )
+    if closed_result is not None:
+        await _cleanup_upload_files(Path(pending_upload["filepath"]))
+        return _submission_failure_response(closed_result)
 
     total_bytes = pending_upload["uploadTotalBytes"]
     if not isinstance(total_bytes, int) or total_bytes <= 0:
@@ -804,6 +848,14 @@ async def complete_submission_flow_upload(
             status_code=status.HTTP_404_NOT_FOUND,
         )
 
+    closed_result = await repositories.fail_pending_submission_upload_if_closed(
+        submission_id,
+        user_id=current_user["id"],
+    )
+    if closed_result is not None:
+        await _cleanup_upload_files(Path(pending_upload["filepath"]))
+        return _submission_failure_response(closed_result)
+
     total_bytes = pending_upload["uploadTotalBytes"]
     if not isinstance(total_bytes, int) or total_bytes <= 0:
         return JSONResponse(
@@ -866,15 +918,11 @@ async def complete_submission_flow_upload(
         submission_id,
         user_id=current_user["id"],
     )
-    if not completed:
+    if not completed["ok"]:
         await asyncio.to_thread(filepath.unlink, missing_ok=True)
-        return JSONResponse(
-            {"ok": False, "error": "Pending upload not found"},
-            status_code=status.HTTP_404_NOT_FOUND,
-        )
+        return _submission_completion_failure_response(completed)
 
     request.app.state.worker.notify()
-    quota = await repositories.fetch_submission_quota(current_user["id"], pending_upload["contestId"])
     return JSONResponse(
         {
             "ok": True,
@@ -882,7 +930,7 @@ async def complete_submission_flow_upload(
             "submissionId": submission_id,
             "uploadReceivedBytes": params.total_size,
             "uploadTotalBytes": params.total_size,
-            "quota": schemas.quota_snapshot_payload(quota) if quota is not None else None,
+            "quota": schemas.quota_snapshot_payload(completed["quota"]),
         },
         status_code=status.HTTP_200_OK,
     )
@@ -905,6 +953,14 @@ async def upload_submission_file(
             status_code=status.HTTP_404_NOT_FOUND,
         )
 
+    closed_result = await repositories.fail_pending_submission_upload_if_closed(
+        submission_id,
+        user_id=user_id,
+    )
+    if closed_result is not None:
+        await _cleanup_upload_files(Path(pending_upload["filepath"]))
+        return _submission_failure_response(closed_result)
+
     filepath = Path(pending_upload["filepath"])
     await asyncio.to_thread(filepath.parent.mkdir, parents=True, exist_ok=True)
 
@@ -919,20 +975,16 @@ async def upload_submission_file(
         )
         raise
 
-    if not completed:
+    if not completed["ok"]:
         await asyncio.to_thread(filepath.unlink, missing_ok=True)
-        return JSONResponse(
-            {"ok": False, "error": "Pending upload not found"},
-            status_code=status.HTTP_404_NOT_FOUND,
-        )
+        return _submission_completion_failure_response(completed)
 
     request.app.state.worker.notify()
-    quota = await repositories.fetch_submission_quota(user_id, pending_upload["contestId"])
     return {
         "ok": True,
         "submissionId": submission_id,
         "bytesWritten": bytes_written,
-        "quota": schemas.quota_snapshot_payload(quota) if quota is not None else None,
+        "quota": schemas.quota_snapshot_payload(completed["quota"]),
     }
 
 
@@ -1000,19 +1052,16 @@ async def create_submission(
         )
         raise
 
-    if not completed:
+    if not completed["ok"]:
         await asyncio.to_thread(filepath.unlink, missing_ok=True)
-        return JSONResponse(
-            {"ok": False, "error": "Pending upload not found"},
-            status_code=status.HTTP_404_NOT_FOUND,
-        )
+        return _submission_completion_failure_response(completed)
 
     request.app.state.worker.notify()
 
     return {
         "ok": True,
         "submissionId": submission_result["submissionId"],
-        "quota": schemas.quota_snapshot_payload(submission_result["quota"]),
+        "quota": schemas.quota_snapshot_payload(completed["quota"]),
     }
 
 
