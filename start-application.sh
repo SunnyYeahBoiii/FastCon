@@ -218,10 +218,7 @@ echo ""
 step "Syncing database schema..."
 cd "$ROOT_DIR"
 
-# Resolve migration state for DBs created with `prisma db push` or with
-# failed migration records. Delete any failed/partial records from
-# _prisma_migrations, then mark all previous migrations as applied so
-# only truly new ones run during migrate deploy.
+# Sanitize ±Infinity scores written by judge_runner before the NaN guard.
 DB_URL_RAW="$(grep -E '^DATABASE_URL=' "$WEB_DIR/.env.local" 2>/dev/null | head -1 | cut -d= -f2- | tr -d '"')"
 DB_FILE="${DB_URL_RAW#file:}"
 PRISMA_DIR="$WEB_DIR/prisma"
@@ -232,20 +229,11 @@ _resolve_db() {
 }
 RESOLVED_DB="$(_resolve_db)"
 if [ -n "$RESOLVED_DB" ] && command -v sqlite3 >/dev/null 2>&1; then
-  HAS_TABLE="$(sqlite3 "$RESOLVED_DB" "SELECT name FROM sqlite_master WHERE type='table' AND name='_prisma_migrations';" 2>/dev/null)"
-  if [ "$HAS_TABLE" = "_prisma_migrations" ]; then
-    sqlite3 "$RESOLVED_DB" "DELETE FROM _prisma_migrations WHERE finished_at IS NULL;"
+  HAS_TABLE="$(sqlite3 "$RESOLVED_DB" "SELECT name FROM sqlite_master WHERE type='table' AND name='Submission';" 2>/dev/null)"
+  if [ "$HAS_TABLE" = "Submission" ]; then
+    sqlite3 "$RESOLVED_DB" "UPDATE Submission SET score = NULL WHERE score IS NOT NULL AND (score < -1e308 OR score > 1e308);"
   fi
 fi
-
-for migration in \
-  20260421085607_rename_email_to_username_remove_contest_code \
-  20260421115644_add_evaluate_code_fields \
-  20260422143000_add_submission_quota_windows \
-  20260518120000_add_submission_quota_usage_state \
-  20260525070000_bigint_submission_upload_bytes; do
-  "$ROOT_DIR/node_modules/.bin/prisma" migrate resolve --applied "$migration" 2>/dev/null || true
-done
 
 npm run db:push
 info "Database schema synced"
