@@ -77,7 +77,7 @@ def _clamp_score(score):
         return None
     if score != score or score == float("inf") or score == float("-inf"):
         return None
-    return round(score, 2)
+    return round(max(0, min(100, score)), 2)
 
 
 def update_submission(submission_id: str, status: str, score=None, metrics=None):
