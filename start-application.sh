@@ -218,14 +218,16 @@ echo ""
 step "Syncing database schema..."
 cd "$ROOT_DIR"
 
-# Mark existing migrations as applied if _prisma_migrations table is missing
-# (happens when DB was created with `prisma db push` instead of migrate)
+# Resolve migration state for DBs created with `prisma db push` or with
+# failed migration records. Mark failed migrations as rolled-back first,
+# then mark all previous migrations as applied so only new ones run.
 for migration in \
   20260421085607_rename_email_to_username_remove_contest_code \
   20260421115644_add_evaluate_code_fields \
   20260422143000_add_submission_quota_windows \
   20260518120000_add_submission_quota_usage_state \
   20260525070000_bigint_submission_upload_bytes; do
+  "$ROOT_DIR/node_modules/.bin/prisma" migrate resolve --rolled-back "$migration" 2>/dev/null || true
   "$ROOT_DIR/node_modules/.bin/prisma" migrate resolve --applied "$migration" 2>/dev/null || true
 done
 
