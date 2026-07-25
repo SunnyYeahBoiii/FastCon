@@ -224,8 +224,18 @@ cd "$ROOT_DIR"
 # only truly new ones run during migrate deploy.
 DB_URL_RAW="$(grep -E '^DATABASE_URL=' "$WEB_DIR/.env.local" 2>/dev/null | head -1 | cut -d= -f2- | tr -d '"')"
 DB_FILE="${DB_URL_RAW#file:}"
-if [ -f "$DB_FILE" ]; then
-  sqlite3 "$DB_FILE" "DELETE FROM _prisma_migrations WHERE finished_at IS NULL;"
+PRISMA_DIR="$WEB_DIR/prisma"
+_resolve_db() {
+  if [ -f "$DB_FILE" ]; then echo "$DB_FILE"; return; fi
+  if [ -f "$PRISMA_DIR/$DB_FILE" ]; then echo "$PRISMA_DIR/$DB_FILE"; return; fi
+  echo ""
+}
+RESOLVED_DB="$(_resolve_db)"
+if [ -n "$RESOLVED_DB" ] && command -v sqlite3 >/dev/null 2>&1; then
+  HAS_TABLE="$(sqlite3 "$RESOLVED_DB" "SELECT name FROM sqlite_master WHERE type='table' AND name='_prisma_migrations';" 2>/dev/null)"
+  if [ "$HAS_TABLE" = "_prisma_migrations" ]; then
+    sqlite3 "$RESOLVED_DB" "DELETE FROM _prisma_migrations WHERE finished_at IS NULL;"
+  fi
 fi
 
 for migration in \
