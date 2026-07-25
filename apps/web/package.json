@@ -10,7 +10,7 @@
     "lint": "eslint .",
     "check-types": "tsc --noEmit",
     "prisma:generate": "set -a; [ ! -f .env.local ] || . ./.env.local; set +a; prisma generate",
-    "db:push": "set -a; [ ! -f .env.local ] || . ./.env.local; set +a; prisma db push",
+    "db:push": "set -a; [ ! -f .env.local ] || . ./.env.local; set +a; prisma migrate deploy",
     "db:reset": "set -a; [ ! -f .env.local ] || . ./.env.local; set +a; prisma db push --accept-data-loss && tsx prisma/seed.ts",
     "seed": "tsx prisma/seed.ts"
   },

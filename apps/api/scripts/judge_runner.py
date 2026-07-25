@@ -72,9 +72,17 @@ def get_contest_info(contest_id: str):
     return dict(row) if row else None
 
 
+def _clamp_score(score):
+    if score is None:
+        return None
+    if score != score or score == float("inf") or score == float("-inf"):
+        return None
+    return round(score, 2)
+
+
 def update_submission(submission_id: str, status: str, score=None, metrics=None):
     conn = get_db_connection()
-    rounded_score = round(score, 2) if score is not None else None
+    rounded_score = _clamp_score(score)
     metrics_json = json.dumps(metrics) if metrics else None
     conn.execute(
         """
