@@ -219,15 +219,21 @@ step "Syncing database schema..."
 cd "$ROOT_DIR"
 
 # Resolve migration state for DBs created with `prisma db push` or with
-# failed migration records. Mark failed migrations as rolled-back first,
-# then mark all previous migrations as applied so only new ones run.
+# failed migration records. Delete any failed/partial records from
+# _prisma_migrations, then mark all previous migrations as applied so
+# only truly new ones run during migrate deploy.
+DB_URL_RAW="$(grep -E '^DATABASE_URL=' "$WEB_DIR/.env.local" 2>/dev/null | head -1 | cut -d= -f2- | tr -d '"')"
+DB_FILE="${DB_URL_RAW#file:}"
+if [ -f "$DB_FILE" ]; then
+  sqlite3 "$DB_FILE" "DELETE FROM _prisma_migrations WHERE finished_at IS NULL;"
+fi
+
 for migration in \
   20260421085607_rename_email_to_username_remove_contest_code \
   20260421115644_add_evaluate_code_fields \
   20260422143000_add_submission_quota_windows \
   20260518120000_add_submission_quota_usage_state \
   20260525070000_bigint_submission_upload_bytes; do
-  "$ROOT_DIR/node_modules/.bin/prisma" migrate resolve --rolled-back "$migration" 2>/dev/null || true
   "$ROOT_DIR/node_modules/.bin/prisma" migrate resolve --applied "$migration" 2>/dev/null || true
 done
 
